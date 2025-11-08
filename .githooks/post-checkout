@@ -1,0 +1,2 @@
+#!/bin/bash
+python scripts/update_version_from_branch.py

@@ -1,0 +1,1 @@
+"""Challenge for Frontier AI"""
