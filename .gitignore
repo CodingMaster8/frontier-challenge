@@ -49,6 +49,7 @@ coverage.xml
 junit/
 junit.xml
 test.db
+br_funds.db
 
 # Translations
 *.mo
@@ -100,9 +101,13 @@ ENV/
 
 # mkdocs documentation
 /site
+docs/challenge_docs
 
 # mypy
 .mypy_cache/
 
 # OS files
 .DS_Store
+
+# Data Folder
+data/
