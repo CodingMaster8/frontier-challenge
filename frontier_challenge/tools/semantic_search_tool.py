@@ -7,6 +7,7 @@ It supports Portuguese and English queries for fuzzy/conceptual fund discovery.
 Uses:
 - OpenAI text-embedding-3-small for embeddings (1536 dimensions)
 - Pinecone for vector storage (free tier: 2GB, ~100K vectors)
+- ReRank Cohere algorithm for improved search relevance
 
 Example queries:
 - "Bradesco gold fund"
@@ -20,9 +21,14 @@ import os
 from typing import List, Dict, Optional, Tuple
 import time
 
+from dotenv import load_dotenv
+
 import duckdb
 from openai import OpenAI
 from pinecone import Pinecone, ServerlessSpec
+
+# Load environment variables from .env file
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -34,15 +40,17 @@ class SemanticSearchTool:
     Requirements:
     - OPENAI_API_KEY environment variable
     - PINECONE_API_KEY environment variable
+    - COHERE_API_KEY environment variable (optional, for reranking)
     """
 
     def __init__(
         self,
         db_path: str = "data/br_funds.db",
         index_name: str = "br-funds-search",
-        embedding_model: str = "text-embedding-3-small",
-        dimension: int = 1536,
+        embedding_model: str = "text-embedding-3-large",
+        dimension: int = 3072,  # 3072 for large, 1536 for small
         metric: str = "cosine",
+        use_rerank: bool = False,
     ):
         """
         Initialize semantic search tool.
@@ -61,12 +69,15 @@ class SemanticSearchTool:
             Embedding dimension (1536 for small, 3072 for large)
         metric : str
             Distance metric: "cosine", "euclidean", or "dotproduct"
+        use_rerank : bool
+            Enable Cohere reranking (default True)
         """
         self.db_path = db_path
         self.index_name = index_name
         self.embedding_model = embedding_model
         self.dimension = dimension
         self.metric = metric
+        self.use_rerank = use_rerank
 
         # Initialize OpenAI client
         api_key = os.getenv("OPENAI_API_KEY")
@@ -84,6 +95,19 @@ class SemanticSearchTool:
         logger.info("Initializing Pinecone client")
         self.pc = Pinecone(api_key=pinecone_key)
         self.index = None
+
+        # Initialize Cohere for reranking
+        if use_rerank:
+            cohere_key = os.getenv("COHERE_API_KEY")
+            if cohere_key:
+                self.cohere_client = cohere.Client(api_key=cohere_key)
+                logger.info("Cohere reranking enabled")
+            else:
+                logger.warning("COHERE_API_KEY not set, reranking disabled")
+                self.use_rerank = False
+                self.cohere_client = None
+        else:
+            self.cohere_client = None
 
     def _generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for a single text using OpenAI."""
@@ -250,6 +274,71 @@ class SemanticSearchTool:
 
         return total_count
 
+    def _rerank_results(
+        self,
+        query: str,
+        candidates: List[Dict],
+        top_k: int = 7
+    ) -> List[Dict]:
+        """
+        Rerank search results using Cohere.
+
+        Parameters
+        ----------
+        query : str
+            Original search query
+        candidates : List[Dict]
+            Initial search results from Pinecone
+        top_k : int
+            Number of results to return after reranking
+
+        Returns
+        -------
+        List[Dict]
+            Reranked results with rerank_score added
+        """
+        if not self.cohere_client or len(candidates) <= top_k:
+            return candidates[:top_k]
+
+        # Prepare documents for reranking
+        documents = []
+        for c in candidates:
+            # Create rich text representation
+            doc = f"{c['legal_name']}"
+            if c['trade_name']:
+                doc += f" ({c['trade_name']})"
+            doc += f" | {c['investment_class']} | {c['anbima_classification']}"
+            if c['matched_text_preview']:
+                doc += f" | {c['matched_text_preview'][:200]}"
+            documents.append(doc)
+
+        # Rerank with Cohere
+        logger.debug(f"Reranking {len(candidates)} candidates with Cohere...")
+        try:
+            rerank_response = self.cohere_client.rerank(
+                model="rerank-multilingual-v3.0",  # Best for Portuguese + English
+                query=query,
+                documents=documents,
+                top_n=top_k,
+                return_documents=False
+            )
+
+            # Add rerank scores to results
+            reranked = []
+            for result in rerank_response.results:
+                idx = result.index
+                candidate = candidates[idx].copy()
+                candidate['rerank_score'] = result.relevance_score
+                candidate['original_score'] = candidate['score']  # Keep original
+                reranked.append(candidate)
+
+            logger.debug(f"Reranked to top {len(reranked)} results")
+            return reranked
+
+        except Exception as e:
+            logger.warning(f"Reranking failed: {e}, returning original results")
+            return candidates[:top_k]
+
     def search(
         self,
         query: str,
@@ -314,6 +403,12 @@ class SemanticSearchTool:
             }
             formatted_results.append(result)
 
+        # Apply reranking if enabled
+        if self.use_rerank and len(formatted_results) > top_k:
+            formatted_results = self._rerank_results(query, formatted_results, top_k)
+        else:
+            formatted_results = formatted_results[:top_k]
+
         return formatted_results
 
     def search_with_explanation(
@@ -375,57 +470,6 @@ Top matches ranked by semantic similarity:
         }
 
 
-# Convenience functions for quick use
-def build_fund_index(
-    db_path: str = "data/br_funds.db",
-    force_rebuild: bool = False,
-) -> int:
-    """
-    Build semantic search index (convenience function).
-
-    Parameters
-    ----------
-    db_path : str
-        Path to DuckDB database
-    force_rebuild : bool
-        Force rebuild even if index exists
-
-    Returns
-    -------
-    int
-        Number of funds indexed
-    """
-    tool = SemanticSearchTool(db_path=db_path)
-    return tool.build_index(force_rebuild=force_rebuild)
-
-
-def search_funds(
-    query: str,
-    top_k: int = 10,
-    db_path: str = "data/br_funds.db",
-) -> List[Dict]:
-    """
-    Search funds by natural language query (convenience function).
-
-    Parameters
-    ----------
-    query : str
-        Search query in Portuguese or English
-    top_k : int
-        Number of results to return
-    db_path : str
-        Path to DuckDB database
-
-    Returns
-    -------
-    List[Dict]
-        Matching funds with metadata
-    """
-    tool = SemanticSearchTool(db_path=db_path)
-    tool.build_index()  # Load existing index
-    return tool.search(query, top_k=top_k)
-
-
 if __name__ == "__main__":
     # Demo usage
     logging.basicConfig(
@@ -439,12 +483,12 @@ if __name__ == "__main__":
 
     # Check environment variables
     if not os.getenv("OPENAI_API_KEY"):
-        print("❌ Error: OPENAI_API_KEY environment variable not set")
+        print("Error: OPENAI_API_KEY environment variable not set")
         print("Set it with: export OPENAI_API_KEY='your-key-here'")
         exit(1)
 
     if not os.getenv("PINECONE_API_KEY"):
-        print("❌ Error: PINECONE_API_KEY environment variable not set")
+        print("Error: PINECONE_API_KEY environment variable not set")
         print("Set it with: export PINECONE_API_KEY='your-key-here'")
         exit(1)
 
@@ -454,7 +498,7 @@ if __name__ == "__main__":
     # Build index
     print("\n📦 Building vector index...")
     count = tool.build_index()
-    print(f"✅ Indexed {count:,} funds")
+    print(f"Indexed {count:,} funds")
 
     # Show index stats
     stats = tool.get_index_stats()
