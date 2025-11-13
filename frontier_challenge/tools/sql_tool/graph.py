@@ -31,11 +31,11 @@ def get_graph(db: str, max_retries: int) -> StateGraph:
     """Build and return the filter workflow graph"""
 
     llm_query_gen = ChatOpenAI(
-        model="o3-mini-2025-01-31", openai_api_key=OPENAI_API_KEY
+        model="o4-mini-2025-04-16", openai_api_key=OPENAI_API_KEY
     ).with_retry()
 
     llm_light = ChatOpenAI(
-        model="gpt-5-chat", openai_api_key=OPENAI_API_KEY
+        model="gpt-5-chat-latest", openai_api_key=OPENAI_API_KEY
     ).with_retry()
 
     workflow = StateGraph(FilterQueryState)

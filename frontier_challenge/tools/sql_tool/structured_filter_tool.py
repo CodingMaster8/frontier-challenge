@@ -22,11 +22,12 @@ import logging
 import os
 from datetime import datetime
 from typing import List, Optional
+import asyncio
 
 import duckdb
 import pandas as pd
 
-from .models import FundFilterCriteria, FundRecord, FilterResult
+from .models import FundFilterCriteria, FundRecord, FilterResult, FilterQueryState
 from .graph import get_graph
 
 logger = logging.getLogger(__name__)
@@ -237,7 +238,17 @@ class StructuredFilterTool:
             "view_schema": self.view_schema,
         }
 
-        final_state = workflow.invoke(initial_state)
+        # Type annotation: tell Python we expect FilterQueryState (or dict)
+        final_state_raw = asyncio.run(workflow.ainvoke(initial_state))
+
+        # Handle both dict and FilterQueryState instances
+        # LangGraph may return either depending on version
+        if isinstance(final_state_raw, dict):
+            # If it's a dict, convert to FilterQueryState for type safety
+            final_state: FilterQueryState = FilterQueryState(**final_state_raw)
+        else:
+            # Already a FilterQueryState instance
+            final_state: FilterQueryState = final_state_raw
 
         if final_state.error_message:
             raise ValueError(f"SQL generation failed: {final_state.error_message}")
@@ -258,27 +269,38 @@ class StructuredFilterTool:
 
     def _df_to_funds(self, df: pd.DataFrame) -> List[FundRecord]:
         """Convert DataFrame to list of FundRecord objects"""
+        # Replace pandas NA with None for proper Pydantic validation
+        # Convert to dict with orient='records' which handles NA properly
+        records = df.to_dict(orient='records')
+
         funds = []
-        for _, row in df.iterrows():
+        for record in records:
+            # Replace pandas NA values with None
+            cleaned_record = {k: (None if pd.isna(v) else v) for k, v in record.items()}
+
+            # Convert risk_class to string if present
+            if cleaned_record.get("risk_class") is not None:
+                cleaned_record["risk_class"] = str(cleaned_record["risk_class"])
+
             fund = FundRecord(
-                fund_id=row.get("fund_id", ""),
-                cnpj=row.get("cnpj", ""),
-                legal_name=row.get("legal_name", ""),
-                trade_name=row.get("trade_name"),
-                investment_class=row.get("investment_class"),
-                anbima_classification=row.get("anbima_classification"),
-                fund_type=row.get("fund_type"),
-                risk_class=row.get("risk_class"),
-                nav=row.get("nav"),
-                management_fee_pct=row.get("management_fee_pct"),
-                performance_fee_pct=row.get("performance_fee_pct"),
-                return_ytd_2024_avg=row.get("return_ytd_2024_avg"),
-                return_12m_avg=row.get("return_12m_avg"),
-                return_5y_pct=row.get("return_5y_pct"),
-                volatility_12m=row.get("volatility_12m"),
-                sharpe_ratio_approx=row.get("sharpe_ratio_approx"),
-                min_initial_investment=row.get("min_initial_investment"),
-                lockup_days=row.get("lockup_days"),
+                fund_id=cleaned_record.get("fund_id", ""),
+                cnpj=cleaned_record.get("cnpj", ""),
+                legal_name=cleaned_record.get("legal_name", ""),
+                trade_name=cleaned_record.get("trade_name"),
+                investment_class=cleaned_record.get("investment_class"),
+                anbima_classification=cleaned_record.get("anbima_classification"),
+                fund_type=cleaned_record.get("fund_type"),
+                risk_class=cleaned_record.get("risk_class"),
+                nav=cleaned_record.get("nav"),
+                management_fee_pct=cleaned_record.get("management_fee_pct"),
+                performance_fee_pct=cleaned_record.get("performance_fee_pct"),
+                return_ytd_2024_avg=cleaned_record.get("return_ytd_2024_avg"),
+                return_12m_avg=cleaned_record.get("return_12m_avg"),
+                return_5y_pct=cleaned_record.get("return_5y_pct"),
+                volatility_12m=cleaned_record.get("volatility_12m"),
+                sharpe_ratio_approx=cleaned_record.get("sharpe_ratio_approx"),
+                min_initial_investment=cleaned_record.get("min_initial_investment"),
+                lockup_days=cleaned_record.get("lockup_days"),
             )
             funds.append(fund)
 
