@@ -39,9 +39,7 @@ Investment constraints:
 - lockup_days: Lockup period in days
 
 Classification:
-- investment_class: Main investment class ('Ações', 'Renda Fixa', 'Multimercado', 'Cambial')
-- anbima_classification: ANBIMA classification
-- fund_type: Fund type
+- fund_type: Fund type (FI, FIC, FIF, FII, FIP)
 - risk_class: Risk classification by administrator
 
 Fund characteristics:
@@ -124,8 +122,7 @@ Example 2: "Large equity funds with good performance"
 ```sql
 SELECT *
 FROM fund_structured_filter_view
-WHERE investment_class = 'Ações'
-  AND nav > 100000000
+WHERE nav > 100000000
   AND return_12m_avg > 10
   AND nav IS NOT NULL
 ORDER BY return_12m_avg DESC
@@ -184,6 +181,43 @@ Your task is to review a generated SQL query and improve it if needed.
    - Is there an ORDER BY clause?
    - Is there a LIMIT clause?
    - Are comparison operators explicit (ASC/DESC)?
+   - If possible, use SELECT * for simplicity
+
+## Key Columns
+Performance metrics:
+- return_ytd_2024_avg: Average YTD return for 2024 (%)
+- return_12m_avg: Average 12-month return (%)
+- return_6m_avg: Average 6-month return (%)
+- return_3m_avg: Average 3-month return (%)
+- return_5y_pct: 5-year return (%)
+- excess_return_5y_pct: Excess return vs benchmark over 5 years (%)
+- volatility_12m: 12-month volatility
+- sharpe_ratio_approx: Approximate Sharpe ratio (return/volatility)
+
+Fees (all in %):
+- management_fee_pct: Management fee
+- performance_fee_pct: Performance fee
+- expense_ratio_pct: Total expense ratio
+- entry_fee_pct: Entry fee
+- exit_fee_pct: Exit fee
+
+Fund size:
+- nav: Net Asset Value in Brazilian Reais (R$)
+
+Investment constraints:
+- min_initial_investment: Minimum initial investment (R$)
+- min_additional_investment: Minimum additional investment (R$)
+- min_balance_required: Minimum balance required (R$)
+- lockup_days: Lockup period in days
+
+Classification:
+- fund_type: Fund type
+- risk_class: Risk classification by administrator
+
+Fund characteristics:
+- is_fund_of_funds: Boolean
+- is_exclusive_fund: Boolean
+- can_invest_abroad_100_pct: Boolean
 
 ## Output Format
 
@@ -192,13 +226,11 @@ If improvements are needed, return the improved query.
 
 Return ONLY the SQL query wrapped in a markdown SQL code block:
 
+
+Return the final query in this format:
 ```sql
-SELECT ...
-FROM fund_structured_filter_view
-WHERE ...
-ORDER BY ...
-LIMIT ...
-```
+<the corrected sql query here>```
+If no changes are needed, return the original query in that same format.
 
 Review the query and provide the best version.
 """

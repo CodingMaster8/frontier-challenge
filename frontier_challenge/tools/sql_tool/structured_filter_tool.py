@@ -50,6 +50,7 @@ class StructuredFilterTool:
         self,
         db_path: str = "data/br_funds.db",
         max_retries: int = 3,
+        refine_query: bool = True,
     ):
         """
         Initialize the structured filter tool.
@@ -63,6 +64,7 @@ class StructuredFilterTool:
         """
         self.db_path = db_path
         self.max_retries = max_retries
+        self.refine_query = refine_query
 
         # Load view schema
         self.view_schema = self._load_view_schema()
@@ -230,7 +232,7 @@ class StructuredFilterTool:
     def _text_to_sql(self, query: str) -> str:
         """Convert natural language query to SQL using LangGraph workflow"""
         # Build the workflow
-        workflow = get_graph(self.db_path, self.max_retries)
+        workflow = get_graph(self.db_path, self.max_retries, self.refine_query)
 
         # Run the workflow
         initial_state = {

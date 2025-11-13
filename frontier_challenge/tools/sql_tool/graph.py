@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Workflow Nodes
 # ============================================================================
 
-def get_graph(db: str, max_retries: int) -> StateGraph:
+def get_graph(db: str, max_retries: int, refine_query: bool) -> StateGraph:
     """Build and return the filter workflow graph"""
 
     llm_query_gen = ChatOpenAI(
@@ -213,7 +213,11 @@ def get_graph(db: str, max_retries: int) -> StateGraph:
     def route_after_validation(state: FilterQueryState) -> str:
         """Route after syntax validation"""
         if state.error_message is None:
-            return "refine_query"
+            # Skip refinement if refine_query is False
+            if refine_query:
+                return "refine_query"
+            else:
+                return "execute_query"
         elif state.retry_count >= max_retries:
             return "too_many_retries"
         else:
@@ -296,16 +300,21 @@ def get_graph(db: str, max_retries: int) -> StateGraph:
     )
 
     # Route after refinement
-    workflow.add_edge("refine_query", "validate_syntax_refined")
+    if refine_query:
+        workflow.add_edge("refine_query", "validate_syntax_refined")
 
-    # Route after refined validation
-    workflow.add_conditional_edges(
-        "validate_syntax_refined",
-        route_after_refined_validation,
-    )
+        # Route after refined validation
+        workflow.add_conditional_edges(
+            "validate_syntax_refined",
+            route_after_refined_validation,
+        )
 
-    # Route after fixing error
-    workflow.add_edge("fix_error", "validate_syntax_refined")
+        # Route after fixing error (goes through refined validation)
+        workflow.add_edge("fix_error", "validate_syntax_refined")
+    else:
+        # When skipping refinement, go directly to execution after validation
+        # and fix errors go back to validation
+        workflow.add_edge("fix_error", "validate_syntax")
 
     # Route after execution
     workflow.add_conditional_edges(
