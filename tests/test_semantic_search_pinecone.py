@@ -41,8 +41,14 @@ def main():
     print("(Subsequent: <1 second to load existing index)")
 
     try:
-        count = tool.build_index(force_rebuild=False)
-        print(f"\n✅ Index ready with {count:,} funds")
+        build_result = tool.build_index(force_rebuild=False)
+        if build_result.success:
+            print(f"\n✅ Index ready with {build_result.total_vectors:,} funds")
+            print(f"   Rebuild: {build_result.rebuild}")
+            print(f"   Time: {build_result.execution_time_ms:.0f}ms")
+        else:
+            print(f"\n❌ Error building index: {build_result.error_message}")
+            return False
     except Exception as e:
         print(f"\n❌ Error building index: {e}")
         return False
@@ -51,13 +57,15 @@ def main():
     print("\n📊 INDEX STATISTICS")
     print("-" * 80)
     stats = tool.get_index_stats()
-    print(f"Total vectors: {stats['total_vectors']:,}")
-    print(f"Dimension: {stats['dimension']}")
-    print(f"Index fullness: {stats['index_fullness']:.2%}")
+    print(f"Index name: {stats.index_name}")
+    print(f"Total vectors: {stats.total_vectors:,}")
+    print(f"Dimension: {stats.dimension}")
+    print(f"Metric: {stats.metric}")
+    print(f"Index fullness: {stats.index_fullness:.2%}")
 
     # Calculate storage usage
-    vector_size_kb = (stats['dimension'] * 4) / 1024  # 4 bytes per float
-    total_size_mb = (stats['total_vectors'] * vector_size_kb) / 1024
+    vector_size_kb = (stats.dimension * 4) / 1024  # 4 bytes per float
+    total_size_mb = (stats.total_vectors * vector_size_kb) / 1024
     free_tier_gb = 2.0
     usage_pct = (total_size_mb / (free_tier_gb * 1024)) * 100
 
@@ -99,22 +107,29 @@ def main():
 
     for i, test in enumerate(test_cases, 1):
         print(f"\n{'='*80}")
-        print(f"TEST {i}/{ len(test_cases)}")
+        print(f"TEST {i}/{len(test_cases)}")
         print(f"Query: {test['query']}")
         print(f"Expected: {test['expected']}")
         print('-'*80)
 
         try:
-            results, explanation = tool.search_with_explanation(
+            explanation = tool.search_with_explanation(
                 test['query'],
                 top_k=test['top_k']
             )
             print(explanation)
 
-            if not results:
+            # Also get structured results for validation
+            result = tool.search(test['query'], top_k=test['top_k'])
+
+            if not result.success:
+                print(f"❌ Search failed: {result.error_message}")
+            elif not result.matches:
                 print("⚠️  No results found!")
             else:
-                print(f"✅ Found {len(results)} results")
+                print(f"✅ Found {len(result.matches)} results")
+                print(f"   Execution time: {result.execution_time_ms:.0f}ms")
+                print(f"   Reranked: {result.reranked}")
 
         except Exception as e:
             print(f"❌ Error: {e}")
@@ -125,8 +140,8 @@ def main():
     print("=" * 80)
     print(f"""
 Summary:
-- Indexed {count:,} Brazilian investment funds
-- Using OpenAI text-embedding-3-small (1536D)
+- Indexed {build_result.total_vectors:,} Brazilian investment funds
+- Using OpenAI {tool.embedding_model} ({tool.dimension}D)
 - Stored in Pinecone serverless
 - Storage: {total_size_mb:.2f} MB ({usage_pct:.2f}% of free tier)
 - Ready for production use!
