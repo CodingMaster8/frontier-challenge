@@ -11,7 +11,10 @@ numpy>=1.24.0
 # Vector embeddings and semantic search (Pinecone + OpenAI)
 openai>=1.0.0
 pandas>=2.2.0
-pinecone-client>=3.0.0
-pydantic>=2.5.0
-pydantic-settings>=2.1.0
+pinecone>=7.3.0
+
+# Configuration management
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
 requests>=2.31.0
