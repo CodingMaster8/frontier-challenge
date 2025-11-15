@@ -130,7 +130,7 @@ def get_financial_agent_graph(
 
         print(f"User input captured ({language}): {user_input}")
         return {
-            "status"
+            "current_status": "analyzing_query",
             "messages": [HumanMessage(content=user_input)],
             "internal_monologue": [HumanMessage(content=user_input)],
         }
@@ -205,7 +205,6 @@ def get_financial_agent_graph(
         # Store the entire response as JSON for later extraction
         return {
             "user_message_tool_reasonings": [ChatMessage(content=response.model_dump_json(), role="fundai")],
-            "current_status": "analyzing_query",
         }
 
     async def node_extract_tool_call(state: AgentState) -> dict:
