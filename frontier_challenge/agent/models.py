@@ -71,6 +71,11 @@ class AgentState(BaseModel):
         description="User's preferred language code. Supports 'en' (English) and 'pt' (Portuguese). All responses should be in this language."
     )
 
+    current_status: str = Field(
+        default="idle",
+        description="Current status of the agent execution. Used to show informative status messages in the UI. Examples: 'greeting', 'analyzing_query', 'searching_funds', 'filtering_data', 'generating_response'."
+    )
+
     langfuse_post_interrupt_tags: list[str] = Field(
         default=None,
         description="Tags to add to Langfuse trace after human-in-the-loop interrupts. Used for monitoring and debugging agent behavior."

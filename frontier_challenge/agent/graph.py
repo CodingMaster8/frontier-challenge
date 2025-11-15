@@ -94,6 +94,7 @@ def get_financial_agent_graph(
         return {
             "messages": [ChatMessage(content=greeting, role="fundai")],
             "internal_monologue": [ChatMessage(content=greeting, role="fundai")],
+            "current_status": "ready",
         }
 
     async def node_await_user_input(state: AgentState) -> dict:
@@ -102,7 +103,7 @@ def get_financial_agent_graph(
 
         Captures user input through the message adapter and detects the language.
         """
-        # nonlocal message_adapter
+
         language = state.user_language or "en"
 
         #user_input = user_msg.content
@@ -129,6 +130,7 @@ def get_financial_agent_graph(
 
         print(f"User input captured ({language}): {user_input}")
         return {
+            "status"
             "messages": [HumanMessage(content=user_input)],
             "internal_monologue": [HumanMessage(content=user_input)],
         }
@@ -202,7 +204,8 @@ def get_financial_agent_graph(
 
         # Store the entire response as JSON for later extraction
         return {
-            "user_message_tool_reasonings": [ChatMessage(content=response.model_dump_json(), role="fundai")]
+            "user_message_tool_reasonings": [ChatMessage(content=response.model_dump_json(), role="fundai")],
+            "current_status": "analyzing_query",
         }
 
     async def node_extract_tool_call(state: AgentState) -> dict:
@@ -224,10 +227,6 @@ def get_financial_agent_graph(
         logger.info(f"🔧 Extracted tool: {tool_name}")
         logger.debug(f"📝 Tool instruction: {tool_instruction[:200] if tool_instruction else '(empty)'}")
 
-        # Log full reasoning if instruction is empty to help debug
-        if not tool_instruction and tool_name not in ["no_tool", "unknown_capability"]:
-            logger.warning(f"⚠️ Empty tool instruction detected! Full reasoning:\n{reasoning}")
-
         return_dict = {
             "tool_invocations": [ChatMessage(content=tool_name, role="fundai")],
             "tool_instructions": [ChatMessage(content=tool_instruction, role="fundai")],
@@ -246,6 +245,7 @@ def get_financial_agent_graph(
                 )
             ]
             return_dict["tool_invocation_has_error"] = [True]
+
         elif tool_name not in tool_names + ["unknown_capability", "no_tool"]:
             logger.error(f"❌ Tool extraction error: Unknown tool '{tool_name}'")
             return_dict["tool_invocation_error_guidance"] = [
@@ -255,27 +255,29 @@ def get_financial_agent_graph(
                 )
             ]
             return_dict["tool_invocation_has_error"] = [True]
-        elif tool_name in tool_names and not tool_instruction:
-            # Validate that tools requiring instructions have non-empty instructions
-            logger.error(f"❌ Tool extraction error: Tool '{tool_name}' requires an instruction but got empty string")
-            return_dict["tool_invocation_error_guidance"] = [
-                ChatMessage(
-                    content=f"Error: Tool '{tool_name}' requires a non-empty instruction. Please provide the query or criteria for the tool.",
-                    role="fundai",
-                )
-            ]
-            return_dict["tool_invocation_has_error"] = [True]
+
         elif tool_name not in ["unknown_capability", "no_tool"]:
-            # Valid tool to invoke
+            # Valid tool to invoke - set appropriate status
             logger.info(f"✅ Will invoke tool: {tool_name}")
+
+            # Map tool names to status
+            status_map = {
+                "semantic_search": "searching_funds",
+                "structured_filter": "filtering_data",
+            }
+            tool_status = status_map.get(tool_name, "processing_results")
+
             return_dict["will_invoke_tool"] = [True]
+            return_dict["current_status"] = tool_status
             return_dict["internal_monologue"] = [
                 ChatMessage(content=reasoning, role="fundai"),
                 HumanMessage(content="Ok, proceed"),
             ]
+
         elif tool_name == "no_tool":
             # No tool needed, answer directly
             logger.info("💭 No tool needed, answering directly")
+            return_dict["current_status"] = "generating_response"
             return_dict["internal_monologue"] = [
                 ChatMessage(content=reasoning, role="fundai"),
                 HumanMessage(content="<think>"),
@@ -285,9 +287,11 @@ def get_financial_agent_graph(
                 ),
                 HumanMessage(content="Answer:"),
             ]
+
         elif tool_name == "unknown_capability":
             # Unknown capability
             logger.info("❓ Unknown capability detected")
+            return_dict["current_status"] = "generating_response"
             return_dict["internal_monologue"] = [
                 ChatMessage(content=reasoning, role="fundai"),
                 HumanMessage(content="<think>"),
@@ -333,6 +337,7 @@ def get_financial_agent_graph(
                     )
                 ],
                 "should_answer_user": [True],
+                "current_status": "processing_results",
             }
 
         except Exception as e:
@@ -347,6 +352,7 @@ def get_financial_agent_graph(
                     ChatMessage(content=f"Tool error: {error_msg}", role="tool")
                 ],
                 "should_answer_user": [True],
+                "current_status": "error",
             }
 
     async def node_execute_structured_filter(state: AgentState) -> dict:
@@ -377,6 +383,7 @@ def get_financial_agent_graph(
                     )
                 ],
                 "should_answer_user": [True],
+                "current_status": "processing_results",
             }
 
         except Exception as e:
@@ -391,6 +398,7 @@ def get_financial_agent_graph(
                     ChatMessage(content=f"Tool error: {error_msg}", role="tool")
                 ],
                 "should_answer_user": [True],
+                "current_status": "error",
             }
 
     async def node_answer_user_query(state: AgentState) -> dict:
@@ -427,6 +435,7 @@ def get_financial_agent_graph(
             "messages": [ChatMessage(content=response_content, role="fundai")],
             "internal_monologue": [ChatMessage(content=response_content, role="fundai")],
             "should_answer_user": [False],
+            "current_status": "ready",
         }
 
     async def node_unknown_capability(state: AgentState) -> dict:
