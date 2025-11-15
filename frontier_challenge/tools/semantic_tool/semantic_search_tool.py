@@ -400,7 +400,7 @@ class SemanticSearchTool:
             logger.warning(f"Reranking failed: {e}, returning original results")
             return candidates[:top_k]
 
-    def search(
+    def semantic_search(
         self,
         query: str,
         top_k: int = 10,
@@ -408,31 +408,62 @@ class SemanticSearchTool:
         use_rerank: Optional[bool] = None,
     ) -> SemanticSearchResult:
         """
-        Search for funds using natural language query.
+        Search for funds using natural language query with semantic similarity.
+
+        This tool uses vector embeddings to find funds based on conceptual similarity
+        rather than exact keyword matches. It's ideal for exploratory searches and
+        fuzzy matching scenarios.
+
+        **When to use this tool:**
+
+        USE for:
+        - Natural language queries (e.g., "sustainable tech funds", "conservative bonds")
+        - Fuzzy/partial name matching (e.g., "Bradesco gold", "BB renda fixa")
+        - Conceptual searches (e.g., "low risk", "ESG investing", "Latin America exposure")
+        - Queries in Portuguese or English (multilingual support)
+        - Finding funds similar to a description or investment strategy
+        - When exact CNPJ or legal name is unknown
+        - Exploratory discovery of fund types or categories
+
+        DON'T USE for:
+        - Exact CNPJ lookups (use SQL tool: `SELECT * FROM funds WHERE cnpj = '...'`)
+        - Precise numerical filters (use structured_filter_tool for AUM, returns, dates)
+        - Portfolio composition analysis (use portfolio_analysis_tool)
+        - Complex aggregations or calculations (use SQL tool directly)
+        - When you need ALL funds matching exact criteria (semantic returns top_k only)
+
+        **Examples:**
+        - "Bradesco gold fund" → finds Bradesco Ouro funds by similarity
+        - "fundos de renda fixa conservadores" → finds conservative fixed income funds
+        - "sustainable technology investing" → finds ESG/tech-focused funds
+        - "Latin American equity exposure" → finds funds with LatAm equity focus
 
         Parameters
         ----------
         query : str
-            Natural language search query in Portuguese or English
-        top_k : int
-            Number of results to return (default 10)
+            Natural language search query in Portuguese or English.
+            Can be fund names, investment strategies, characteristics, or descriptions.
+        top_k : int, default=10
+            Maximum number of results to return (1-100 recommended).
+            Results are ranked by semantic similarity score.
         filter_by : dict, optional
-            Metadata filters, e.g., {'investment_class': 'Ações'}
+            Available filter fields: investment_class, anbima_classification,
+            fund_type, structure, target_audience.
         use_rerank : bool, optional
-            Override default rerank setting for this query
+            Enable Cohere reranking for improved relevance (slower but more accurate).
+            Overrides the instance's default rerank setting.
 
         Returns
         -------
         SemanticSearchResult
-            Search result with matches and metadata
-
-        Examples
-        --------
-        >>> tool = SemanticSearchTool()
-        >>> result = tool.search("Bradesco gold fund", top_k=5)
-        >>> if result.success:
-        ...     for match in result.matches:
-        ...         print(f"{match.cnpj}: {match.legal_name} (score: {match.score:.3f})")
+            Search result containing:
+            - matches: List of semantically similar funds with similarity scores
+            - total_matches: Number of results returned
+            - query: Original search query
+            - embedding_model: Model used for embeddings
+            - reranked: Whether results were reranked
+            - execution_time_ms: Search execution time
+            - error_message: Error details if search failed
         """
         start_time = datetime.now()
 
@@ -594,63 +625,3 @@ class SemanticSearchTool:
             metric=self.metric,
             index_name=self.index_name,
         )
-
-
-if __name__ == "__main__":
-    # Demo usage
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-
-    print("=" * 80)
-    print("SEMANTIC SEARCH TOOL - PINECONE + OPENAI DEMO")
-    print("=" * 80)
-
-    # Check environment variables
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Error: OPENAI_API_KEY environment variable not set")
-        print("Set it with: export OPENAI_API_KEY='your-key-here'")
-        exit(1)
-
-    if not os.getenv("PINECONE_API_KEY"):
-        print("Error: PINECONE_API_KEY environment variable not set")
-        print("Set it with: export PINECONE_API_KEY='your-key-here'")
-        exit(1)
-
-    # Initialize tool
-    tool = SemanticSearchTool()
-
-    # Build index
-    print("\n📦 Building vector index...")
-    build_result = tool.build_index()
-
-    if build_result.success:
-        print(f"Indexed {build_result.total_vectors:,} funds")
-        print(f"Rebuild: {build_result.rebuild}")
-        print(f"Time: {build_result.execution_time_ms:.0f}ms")
-    else:
-        print(f"Index build failed: {build_result.error_message}")
-        exit(1)
-
-    # Show index stats
-    stats = tool.get_index_stats()
-    print(f"\nIndex Statistics:")
-    print(f"   Index: {stats.index_name}")
-    print(f"   Total vectors: {stats.total_vectors:,}")
-    print(f"   Dimension: {stats.dimension}")
-    print(f"   Metric: {stats.metric}")
-    print(f"   Index fullness: {stats.index_fullness:.2%}")
-
-    # Example searches
-    test_queries = [
-        "Bradesco gold fund",
-        "fundos de renda fixa conservadores",
-        "sustainable technology investing",
-        "Latin American equity exposure",
-    ]
-
-    for query in test_queries:
-        print("\n" + "=" * 80)
-        explanation = tool.search_with_explanation(query, top_k=3)
-        print(explanation)
