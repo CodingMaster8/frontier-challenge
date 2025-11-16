@@ -22,7 +22,9 @@ from frontier_challenge.agent.prompts import GREETING_TEMPLATES
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage
 
+# Suppress verbose logging from PIL and matplotlib
 logging.getLogger('PIL').setLevel(logging.INFO)
+logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
 
 # Status messages in different languages
 STATUS_MESSAGES = {
@@ -34,6 +36,7 @@ STATUS_MESSAGES = {
         "filtering_data": "Filtering fund data...",
         "processing_results": "Processing results...",
         "generating_response": "Generating response...",
+        "generating_visualization": "Generating visualization...",
         "error": "Error occurred",
     },
     "pt": {
@@ -44,6 +47,7 @@ STATUS_MESSAGES = {
         "filtering_data": "Filtrando dados de fundos...",
         "processing_results": "Processando resultados...",
         "generating_response": "Gerando resposta...",
+        "generating_visualization": "Gerando visualização...",
         "error": "Ocorreu um erro",
     }
 }
@@ -114,8 +118,8 @@ if "agent_graph" not in st.session_state:
 # Sidebar
 with st.sidebar:
     # Display the frontier logo
-    if logo_path.exists():
-        st.image(str(logo_path), width=150)
+    #if logo_path.exists():
+        #st.image(str(logo_path), width=50)
 
     st.title("Frontier AI")
     st.markdown("### Brazilian Investment Funds Assistant")
@@ -169,6 +173,23 @@ for message in st.session_state.messages:
     msg_avatar = avatar if message["role"] == "assistant" else None
     with st.chat_message(message["role"], avatar=msg_avatar):
         st.markdown(message["content"])
+
+        # Display visualizations if present
+        if "visualizations" in message and message["visualizations"]:
+            st.markdown("---")
+            for viz in message["visualizations"]:
+                try:
+                    # Try use_container_width first, fall back to use_column_width for compatibility
+                    try:
+                        st.image(viz["image_path"], use_container_width=True)
+                    except TypeError:
+                        st.image(viz["image_path"], use_column_width=True)
+
+                    if viz.get("description"):
+                        st.caption(viz["description"])
+
+                except Exception as e:
+                    logger.error(f"Error displaying visualization in history: {e}")
 
 # Chat input
 if prompt := st.chat_input("Ask me about Brazilian funds..." if st.session_state.language == "en" else "Pergunte-me sobre fundos brasileiros..."):
@@ -244,8 +265,43 @@ if prompt := st.chat_input("Ask me about Brazilian funds..." if st.session_state
                 full_response = "I apologize, but I couldn't generate a response. Please try again." if st.session_state.language == "en" else "Desculpe, não consegui gerar uma resposta. Tente novamente."
                 logger.warning("⚠️ No valid response from agent")
 
+            # Display text response
             message_placeholder.markdown(full_response)
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
+
+            # Check for visualizations
+            viz_results = []
+            if result and "visualization_results" in result and result["visualization_results"]:
+                viz_results = result["visualization_results"][-1] if result["visualization_results"] else []
+                logger.info(f"🎨 Found {len(viz_results)} visualization(s)")
+
+            # Display visualizations if available
+            if viz_results:
+                st.markdown("---")
+                for i, viz in enumerate(viz_results):
+                    logger.info(f"📊 Displaying visualization {i+1}: {viz.get('visualization_type', 'unknown')}")
+
+                    # Display the image
+                    try:
+                        # Try use_container_width first, fall back to use_column_width for compatibility
+                        try:
+                            st.image(viz["image_path"], use_container_width=True)
+                        except TypeError:
+                            st.image(viz["image_path"], use_column_width=True)
+
+                        # Display caption with description
+                        if viz.get("description"):
+                            st.caption(viz["description"])
+
+                    except Exception as e:
+                        logger.error(f"❌ Error displaying visualization: {e}")
+                        error_msg = "Could not display visualization" if st.session_state.language == "en" else "Não foi possível exibir a visualização"
+                        st.warning(error_msg)
+
+            # Store message with visualization info
+            message_data = {"role": "assistant", "content": full_response}
+            if viz_results:
+                message_data["visualizations"] = viz_results
+            st.session_state.messages.append(message_data)
 
         except Exception as e:
             logger.error(f"❌ Error during agent execution: {str(e)}", exc_info=True)
