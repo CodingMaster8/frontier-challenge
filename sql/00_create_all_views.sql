@@ -1,12 +1,13 @@
 -- ============================================================================
 -- MASTER SCRIPT: Create All Fund Search Views
 -- ============================================================================
--- This script creates all three specialized views for the hybrid search system
+-- This script creates all four specialized views for the hybrid search system
 --
 -- Execution order:
 -- 1. Semantic Search View - for embedding-based fuzzy search
 -- 2. Structured Filter View - for precise SQL filtering
 -- 3. Portfolio Analysis View - for holdings-based search
+-- 4. Holdings Detail View - for detailed position-level queries
 --
 -- Usage: Run this entire script in DuckDB to set up all views
 -- ============================================================================
@@ -37,11 +38,20 @@
 -- ============================================================================
 -- VIEW 3: PORTFOLIO ANALYSIS VIEW
 -- ============================================================================
-\echo 'Creating fund_portfolio_analysis_view and fund_holdings_detail_view...'
+\echo 'Creating fund_portfolio_analysis_view...'
 
 \ir 03_create_portfolio_analysis_view.sql
 
 \echo '✓ fund_portfolio_analysis_view created'
+\echo ''
+
+-- ============================================================================
+-- VIEW 4: HOLDINGS DETAIL VIEW
+-- ============================================================================
+\echo 'Creating fund_holdings_detail_view...'
+
+\ir 04_create_holdings_detail_view.sql
+
 \echo '✓ fund_holdings_detail_view created'
 \echo ''
 

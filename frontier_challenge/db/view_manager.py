@@ -32,6 +32,7 @@ class ViewManager:
             "01_create_semantic_search_view.sql",
             "02_create_structured_filter_view.sql",
             "03_create_portfolio_analysis_view.sql",
+            "04_create_holdings_detail_view.sql",
         ]
 
         conn = duckdb.connect(self.db_path)
@@ -125,6 +126,7 @@ class ViewManager:
             "01_create_semantic_search_view.sql": "fund_semantic_search_view",
             "02_create_structured_filter_view.sql": "fund_structured_filter_view",
             "03_create_portfolio_analysis_view.sql": "fund_portfolio_analysis_view",
+            "04_create_holdings_detail_view.sql": "fund_holdings_detail_view",
         }
         return mapping.get(filename, "unknown")
 
@@ -139,6 +141,81 @@ class ViewManager:
         # Take first view definition (stops at next comment block or end)
         view_sql = 'CREATE OR REPLACE VIEW ' + parts[1].split('-- =====')[0].strip()
         return view_sql
+
+    def recreate_view(self, view_identifier: str) -> bool:
+        """
+        Drop and recreate a specific view
+
+        Args:
+            view_identifier: Either the view name (e.g., 'fund_portfolio_analysis_view')
+                           or the SQL filename (e.g., '03_create_portfolio_analysis_view.sql')
+
+        Returns:
+            True if successful, False otherwise
+        """
+        # Map of view names to their SQL files
+        view_to_file = {
+            "fund_semantic_search_view": "01_create_semantic_search_view.sql",
+            "fund_structured_filter_view": "02_create_structured_filter_view.sql",
+            "fund_portfolio_analysis_view": "03_create_portfolio_analysis_view.sql",
+            "fund_holdings_detail_view": "04_create_holdings_detail_view.sql",
+        }
+
+        # Also support short names
+        short_names = {
+            "semantic": "fund_semantic_search_view",
+            "structured": "fund_structured_filter_view",
+            "portfolio": "fund_portfolio_analysis_view",
+            "holdings": "fund_holdings_detail_view",
+        }
+
+        # Determine the view name and SQL file
+        if view_identifier in short_names:
+            view_name = short_names[view_identifier]
+            sql_file = view_to_file[view_name]
+        elif view_identifier in view_to_file:
+            view_name = view_identifier
+            sql_file = view_to_file[view_name]
+        elif view_identifier.endswith('.sql'):
+            sql_file = view_identifier
+            view_name = self._extract_view_name(view_identifier)
+        else:
+            logger.error(f"Unknown view identifier: {view_identifier}")
+            return False
+
+        conn = duckdb.connect(self.db_path)
+
+        try:
+            # Drop the view if it exists
+            logger.info(f"Dropping view '{view_name}' if it exists...")
+            conn.execute(f"DROP VIEW IF EXISTS {view_name}")
+
+            # Read and apply the new SQL
+            file_path = self.sql_dir / sql_file
+            if not file_path.exists():
+                logger.error(f"SQL file not found: {file_path}")
+                return False
+
+            logger.info(f"Creating view '{view_name}' from {sql_file}")
+            sql_content = file_path.read_text()
+
+            # Extract CREATE VIEW statement
+            view_sql = self._extract_create_statement(sql_content)
+
+            if view_sql:
+                conn.execute(view_sql)
+                logger.info(f"✓ Successfully recreated view '{view_name}'")
+                conn.close()
+                return True
+            else:
+                logger.error(f"✗ Could not extract CREATE statement from {sql_file}")
+                conn.close()
+                return False
+
+        except Exception as e:
+            logger.error(f"✗ Error recreating view '{view_name}': {str(e)}")
+            conn.close()
+            return False
 
     def validate_views(self) -> Dict[str, bool]:
         """Validate that all views return data"""
