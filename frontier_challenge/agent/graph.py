@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 def get_financial_agent_graph(
     db_path: str = "data/br_funds.db",
-    model_name: str = "gpt-4o-mini",
+    model_name: str = "gpt-5.1",
     checkpointer: Optional[BaseCheckpointSaver] = None,
     session_state=None,
 ) -> CompiledStateGraph:
@@ -233,7 +233,7 @@ def get_financial_agent_graph(
             reasoning = reasoning_json
 
         logger.info(f"🔧 Extracted tool: {tool_name}")
-        logger.debug(f"📝 Tool instruction: {tool_instruction[:200] if tool_instruction else '(empty)'}")
+        logger.debug(f"Tool instruction: {tool_instruction[:200] if tool_instruction else '(empty)'}")
 
         return_dict = {
             "tool_invocations": [ChatMessage(content=tool_name, role="fundai")],
@@ -284,7 +284,7 @@ def get_financial_agent_graph(
 
         elif tool_name == "no_tool":
             # No tool needed, answer directly
-            logger.info("💭 No tool needed, answering directly")
+            logger.info("No tool needed, answering directly")
             return_dict["current_status"] = "generating_response"
             return_dict["visualization_results"] = [[]]  # Clear previous visualizations
             return_dict["internal_monologue"] = [
@@ -318,7 +318,7 @@ def get_financial_agent_graph(
         """Execute semantic search tool."""
         instruction = state.tool_instructions[-1].content
 
-        logger.info(f"🔍 Executing semantic search...")
+        logger.info(f"Executing semantic search...")
         logger.debug(f"Query: {instruction}")
 
         try:
@@ -392,7 +392,7 @@ def get_financial_agent_graph(
             if result.funds and len(result.funds) > 0:
                 # Convert list of FundRecord to DataFrame
                 df = pd.DataFrame([fund.model_dump() for fund in result.funds])
-                logger.info(f"📊 Created DataFrame with shape {df.shape}")
+                logger.info(f"Created DataFrame with shape {df.shape}")
 
             # Serialize DataFrame
             df_bytes = None
@@ -449,7 +449,7 @@ def get_financial_agent_graph(
         recent_monologue = internal_monologue[-10:] if len(internal_monologue) > 10 else internal_monologue
 
         if len(internal_monologue) > 10:
-            logger.debug(f"💭 Limiting context window: using last 10 of {len(internal_monologue)} messages")
+            logger.debug(f"Limiting context window: using last 10 of {len(internal_monologue)} messages")
 
         messages.extend(transform_roles(recent_monologue))
 
@@ -517,7 +517,7 @@ def get_financial_agent_graph(
         df = pd.read_pickle(BytesIO(df_bytes))
         result_count = len(df)
 
-        logger.info(f"📊 Result count: {result_count}")
+        logger.info(f"Result count: {result_count}")
 
         # Build decision prompt with structured output
         prompt_template = ChatPromptTemplate.from_template(VISUALIZATION_DECISION_PROMPT)

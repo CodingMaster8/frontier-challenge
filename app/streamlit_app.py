@@ -22,7 +22,9 @@ from frontier_challenge.agent.prompts import GREETING_TEMPLATES
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage
 
+# Suppress verbose logging from PIL and matplotlib
 logging.getLogger('PIL').setLevel(logging.INFO)
+logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
 
 # Status messages in different languages
 STATUS_MESSAGES = {
