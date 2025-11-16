@@ -81,6 +81,27 @@ class AgentState(BaseModel):
         description="Tags to add to Langfuse trace after human-in-the-loop interrupts. Used for monitoring and debugging agent behavior."
     )
 
+    # Visualization state
+    should_generate_visualization: Annotated[Sequence[bool], operator.add] = Field(
+        default=None,
+        description="Boolean flags indicating whether a visualization should be generated. True means visualization adds value, False means it doesn't."
+    )
+
+    visualization_reasoning: Annotated[Sequence[str], operator.add] = Field(
+        default=None,
+        description="Reasoning for why a visualization should or shouldn't be generated. Explains the decision-making process."
+    )
+
+    tool_result_dataframe: Annotated[Sequence[bytes], operator.add] = Field(
+        default=None,
+        description="Serialized DataFrame from tool results (structured_filter). Used as input for visualization generation."
+    )
+
+    visualization_results: Annotated[Sequence[list], operator.add] = Field(
+        default=None,
+        description="List of generated visualizations with metadata (image paths, descriptions, code). Empty list if no visualization was generated."
+    )
+
 
 class ToolReasoningResponse(BaseModel):
     """Response from tool reasoning node."""
@@ -95,6 +116,18 @@ class ToolReasoningResponse(BaseModel):
 
     reasoning: str = Field(
         description="Internal reasoning explaining why this tool was selected and how it will help answer the user's query. Include: (1) What the user is asking for, (2) Why this tool is the best choice, (3) What information the tool will provide."
+    )
+
+
+class VisualizationDecisionResponse(BaseModel):
+    """Response from visualization decision node."""
+
+    should_visualize: bool = Field(
+        description="Whether a visualization should be generated. True if visualization adds value, False otherwise."
+    )
+
+    reasoning: str = Field(
+        description="Brief explanation of why visualization adds or doesn't add value to the user's query response."
     )
 
 

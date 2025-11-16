@@ -204,27 +204,43 @@ def _format_filter_result(result: FilterResult, language: str) -> str:
     fund_list = []
     for i, fund in enumerate(result.funds[:10], 1):  # Limit to 10 for readability
         fund_info = f"{i}. **{fund.legal_name}**\n"
-        fund_info += f"   - CNPJ: {fund.cnpj}\n"
+        fund_info += f"   - CNPJ: `{fund.cnpj}`\n"
 
         # Add classification if available
         if fund.investment_class:
             fund_info += f"   - Investment Class: {fund.investment_class}\n"
+        if fund.anbima_classification:
+            fund_info += f"   - ANBIMA Classification: {fund.anbima_classification}\n"
         if fund.fund_type:
             fund_info += f"   - Type: {fund.fund_type}\n"
+        if fund.risk_class:
+            fund_info += f"   - Risk Class: {fund.risk_class}\n"
 
-        # Add key metrics if available
+        # Add ALL available performance metrics
         if fund.return_ytd_2024_avg is not None:
-            fund_info += f"   - YTD Return: {fund.return_ytd_2024_avg:.2f}%\n"
+            fund_info += f"   - YTD 2024 Return: {fund.return_ytd_2024_avg:.2f}%\n"
         if fund.return_12m_avg is not None:
-            fund_info += f"   - 12M Return: {fund.return_12m_avg:.2f}%\n"
-        if fund.management_fee_pct is not None:
-            fund_info += f"   - Management Fee: {fund.management_fee_pct:.2f}%\n"
-        if fund.nav is not None:
-            fund_info += f"   - NAV: R$ {fund.nav:,.2f}\n"
+            fund_info += f"   - 12-Month Return: {fund.return_12m_avg:.2f}%\n"
+        if fund.return_5y_pct is not None:
+            fund_info += f"   - 5-Year Return: {fund.return_5y_pct:.2f}%\n"
         if fund.volatility_12m is not None:
             fund_info += f"   - Volatility (12M): {fund.volatility_12m:.2f}%\n"
         if fund.sharpe_ratio_approx is not None:
             fund_info += f"   - Sharpe Ratio: {fund.sharpe_ratio_approx:.2f}\n"
+
+        # Add fee information
+        if fund.management_fee_pct is not None:
+            fund_info += f"   - Management Fee: {fund.management_fee_pct:.2f}%\n"
+        if fund.performance_fee_pct is not None:
+            fund_info += f"   - Performance Fee: {fund.performance_fee_pct:.2f}%\n"
+
+        # Add size and constraints
+        if fund.nav is not None:
+            fund_info += f"   - NAV: R$ {fund.nav:,.2f}\n"
+        if fund.min_initial_investment is not None:
+            fund_info += f"   - Minimum Investment: R$ {fund.min_initial_investment:,.2f}\n"
+        if fund.lockup_days is not None:
+            fund_info += f"   - Lockup Period: {fund.lockup_days} days\n"
 
         fund_list.append(fund_info)
 

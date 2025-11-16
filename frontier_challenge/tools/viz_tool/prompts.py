@@ -114,7 +114,7 @@ You must modify this template:
 
 2. **Financial Data Handling**:
    - Convert date columns properly: `pd.to_datetime(data['date'], errors='coerce')`
-   - Handle percentage values (multiply by 100 if needed)
+   - Handle percentage values (They are in percent format, e.g., 5.5 means 5.5%)
    - Format currency values with appropriate notation
    - Handle missing data gracefully
 
