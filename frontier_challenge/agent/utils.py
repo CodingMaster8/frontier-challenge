@@ -9,6 +9,7 @@ from langchain_core.messages import BaseMessage
 
 from frontier_challenge.tools.semantic_tool import SemanticSearchResult
 from frontier_challenge.tools.sql_tool.models import FilterResult
+from frontier_challenge.tools.holdings_tool.models import HoldingsSearchResult
 
 
 class SafeParser(BaseOutputParser):
@@ -140,7 +141,7 @@ def format_tool_result(tool_name: str, result, language: str = "en") -> str:
     ----------
     tool_name : str
         Name of the tool that was executed
-    result : SemanticSearchResult or FilterResult
+    result : SemanticSearchResult or FilterResult or HoldingsSearchResult
         Result from the tool (Pydantic model)
     language : str
         User's preferred language
@@ -154,8 +155,94 @@ def format_tool_result(tool_name: str, result, language: str = "en") -> str:
         return _format_semantic_result(result, language)
     elif tool_name == "structured_filter":
         return _format_filter_result(result, language)
+    elif tool_name == "holdings_search":
+        return _format_holdings_result(result, language)
     else:
         return str(result)
+
+
+def _format_holdings_result(result: HoldingsSearchResult, language: str) -> str:
+    """Format holdings search results."""
+    # Handle error case
+    if not result.success:
+        error_prefix = "Erro" if language == "pt" else "Error"
+        return f"{error_prefix}: {result.error_message or 'Unknown error'}"
+
+    # Handle no results
+    if not result.fund_summaries and not result.holdings:
+        if language == "pt":
+            return "Nenhum fundo encontrado com as participações especificadas."
+        return "No funds found with the specified holdings."
+
+    # Format fund summaries (grouped by fund)
+    if result.fund_summaries:
+        header = (
+            f"Encontrei {result.unique_funds_count} fundo(s) com essas participações:\n\n"
+            if language == "pt"
+            else f"Found {result.unique_funds_count} fund(s) with these holdings:\n\n"
+        )
+
+        fund_list = []
+        for i, summary in enumerate(result.fund_summaries[:20], 1):  # Limit to 20 for readability
+            fund_info = f"{i}. **{summary.legal_name}**\n"
+            fund_info += f"   - CNPJ: `{summary.cnpj}`\n"
+
+            if summary.investment_class:
+                fund_info += f"   - Investment Class: {summary.investment_class}\n"
+
+            # Holding details
+            if summary.asset_name:
+                fund_info += f"   - Top Holding: {summary.asset_name}\n"
+            if summary.issuer_name:
+                fund_info += f"   - Issuer: {summary.issuer_name}\n"
+            if summary.portfolio_weight_pct is not None:
+                fund_info += f"   - Portfolio Weight: {summary.portfolio_weight_pct:.2f}%\n"
+            if summary.position_value is not None:
+                fund_info += f"   - Position Value: R$ {summary.position_value:,.2f}\n"
+
+            fund_list.append(fund_info)
+
+        if len(result.fund_summaries) > 20:
+            more_msg = (
+                f"\n... e mais {len(result.fund_summaries) - 20} fundos"
+                if language == "pt"
+                else f"\n... and {len(result.fund_summaries) - 20} more funds"
+            )
+            fund_list.append(more_msg)
+
+        return header + "\n".join(fund_list)
+
+    # Format individual holdings
+    else:
+        header = (
+            f"Encontrei {len(result.holdings)} participação(ões):\n\n"
+            if language == "pt"
+            else f"Found {len(result.holdings)} holding(s):\n\n"
+        )
+
+        holding_list = []
+        for i, holding in enumerate(result.holdings[:20], 1):
+            holding_info = f"{i}. **{holding.legal_name}** - {holding.asset_name}\n"
+            holding_info += f"   - CNPJ: `{holding.cnpj}`\n"
+
+            if holding.portfolio_weight_pct is not None:
+                holding_info += f"   - Weight: {holding.portfolio_weight_pct:.2f}%\n"
+            if holding.position_value is not None:
+                holding_info += f"   - Value: R$ {holding.position_value:,.2f}\n"
+            if holding.asset_class:
+                holding_info += f"   - Asset Class: {holding.asset_class}\n"
+
+            holding_list.append(holding_info)
+
+        if len(result.holdings) > 20:
+            more_msg = (
+                f"\n... e mais {len(result.holdings) - 20} participações"
+                if language == "pt"
+                else f"\n... and {len(result.holdings) - 20} more holdings"
+            )
+            holding_list.append(more_msg)
+
+        return header + "\n".join(holding_list)
 
 
 def _format_semantic_result(result: SemanticSearchResult, language: str) -> str:

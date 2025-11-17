@@ -126,30 +126,3 @@ LEFT JOIN lamina_metadata lm
     AND lm.rn = 1  -- Only most recent lamina data
 
 ORDER BY af.legal_name;
-
-
--- ============================================================================
--- USAGE EXAMPLES FOR SEMANTIC SEARCH VIEW
--- ============================================================================
-
--- Example 1: Preview the searchable text
--- SELECT cnpj, legal_name, LEFT(searchable_text, 200) as text_preview
--- FROM fund_semantic_search_view
--- LIMIT 5;
-
--- Example 2: Count total funds available for semantic search
--- SELECT COUNT(*) as total_active_funds
--- FROM fund_semantic_search_view;
-
--- Example 3: Check funds with richest metadata (longest searchable text)
--- SELECT cnpj, legal_name, LENGTH(searchable_text) as text_length
--- FROM fund_semantic_search_view
--- ORDER BY text_length DESC
--- LIMIT 10;
-
--- Example 4: Find funds by keyword (before implementing embeddings)
--- SELECT cnpj, legal_name, investment_class
--- FROM fund_semantic_search_view
--- WHERE LOWER(searchable_text) LIKE '%bradesco%'
---    OR LOWER(searchable_text) LIKE '%ouro%'  -- 'gold' in Portuguese
--- LIMIT 10;

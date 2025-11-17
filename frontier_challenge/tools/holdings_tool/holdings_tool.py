@@ -26,25 +26,27 @@ import asyncio
 
 import duckdb
 import pandas as pd
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_openai import ChatOpenAI
 
 from .models import (
     HoldingsSearchCriteria,
     HoldingRecord,
     FundSummaryWithHolding,
     HoldingsSearchResult,
+    EntityExtractionResult,
 )
+from .holdings_prompt import ENTITY_EXTRACTION_PROMPT
+from ...settings import OPENAI_API_KEY
+
 
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# Main Tool Class
-# ============================================================================
-
-
 class HoldingsSearchTool:
     """
-    Production-grade holdings search tool with fuzzy matching capabilities.
+    Holdings search tool with fuzzy matching capabilities.
 
     This tool searches for funds holding specific assets or companies,
     leveraging DuckDB's Levenshtein distance function for fuzzy matching.
@@ -54,6 +56,7 @@ class HoldingsSearchTool:
         self,
         db_path: str = "data/br_funds.db",
         default_similarity_threshold: float = 0.6,
+        entity_extraction_model: str = "gpt-4o-mini",
     ):
         """
         Initialize the holdings search tool.
@@ -64,6 +67,8 @@ class HoldingsSearchTool:
             Path to DuckDB database
         default_similarity_threshold : float
             Default minimum similarity score for fuzzy matching (0-1)
+        entity_extraction_model : str
+            LLM model for entity extraction (default: gpt-4o-mini)
         """
         self.db_path = db_path
         self.default_similarity_threshold = default_similarity_threshold
@@ -71,7 +76,7 @@ class HoldingsSearchTool:
         # Load view schema
         self.view_schema = self._load_view_schema()
 
-        logger.info(f"Initialized HoldingsSearchTool with db: {db_path}")
+        logger.info(f"Initialized HoldingsSearchTool with db: {db_path}, entity model: {entity_extraction_model}")
 
     def _load_view_schema(self) -> str:
         """Load the schema of fund_holdings_detail_view"""
@@ -100,6 +105,51 @@ class HoldingsSearchTool:
         except Exception as e:
             logger.error(f"Error loading view schema: {e}")
             return "Schema information not available"
+
+    async def _extract_entities_from_query(self, query: str) -> EntityExtractionResult:
+        """
+        Extract company, bank, and asset names from a natural language query using LLM.
+
+        Parameters
+        ----------
+        query : str
+            Natural language query from user
+
+        Returns
+        -------
+        EntityExtractionResult
+            Extracted entities
+        """
+        logger.info(f"Extracting entities from query: {query[:100]}...")
+
+        # Initialize LLM for entity extraction
+        llm_light = ChatOpenAI(
+            model="gpt-5-chat-latest",
+            temperature=0,
+        ).with_retry()
+
+        try:
+            # Build prompt
+            prompt_template = ChatPromptTemplate.from_template(ENTITY_EXTRACTION_PROMPT)
+            parser = PydanticOutputParser(pydantic_object=EntityExtractionResult)
+
+            # Build chain
+            chain = prompt_template | llm_light | parser
+
+            # Extract entities
+            result = await chain.ainvoke({
+                "query": query,
+                "format_instructions": parser.get_format_instructions()
+            })
+
+            logger.info(f"✅ Extracted {len(result.entities)} entities: {result.entities}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Error extracting entities: {e}", exc_info=True)
+            # Fallback to empty list
+            return EntityExtractionResult(entities=[])
 
     async def search_holdings(
         self,
@@ -135,9 +185,23 @@ class HoldingsSearchTool:
             if criteria:
                 sql_query, search_method = self._criteria_to_sql(criteria)
             elif query:
-                # For now, implement direct SQL generation
-                # Later can add LangGraph workflow like sql_tool
-                sql_query, search_method = self._simple_text_to_sql(query)
+                # Use LLM to extract entities from the query
+                logger.info("Using LLM entity extraction for holdings search")
+                extraction_result = await self._extract_entities_from_query(query)
+
+                if extraction_result.entities:
+                    # Build SQL with multiple entity searches combined with OR
+                    sql_query, search_method = self._entities_to_sql(
+                        extraction_result.entities,
+                        min_similarity=0.6,
+                        group_by_fund=True,
+                        limit=20
+                    )
+                    logger.info(f"Generated SQL for {len(extraction_result.entities)} entities")
+                else:
+                    # Fallback to simple text-to-SQL if no entities extracted
+                    logger.warning("No entities extracted, falling back to simple text-to-SQL")
+                    sql_query, search_method = self._simple_text_to_sql(query)
             else:
                 return HoldingsSearchResult(
                     success=False,
@@ -292,6 +356,108 @@ class HoldingsSearchTool:
             """
 
         return sql, search_method
+
+    def _entities_to_sql(
+        self,
+        entities: List[str],
+        min_similarity: float = 0.6,
+        group_by_fund: bool = True,
+        limit: int = 50
+    ) -> tuple[str, str]:
+        """
+        Convert extracted entities to SQL query with fuzzy matching.
+
+        This method creates an SQL query that searches for funds holding any of the extracted entities,
+        using Levenshtein distance for fuzzy matching on each entity.
+
+        Parameters
+        ----------
+        entities : List[str]
+            List of company/asset names extracted by LLM
+        min_similarity : float
+            Minimum similarity score for fuzzy matching (0-1)
+        group_by_fund : bool
+            Whether to group results by fund
+        limit : int
+            Maximum number of results
+
+        Returns
+        -------
+        tuple[str, str]
+            (sql_query, search_method)
+        """
+        if not entities:
+            # Fallback to match all
+            where_clause = "1=1"
+        else:
+            # Build OR conditions for each entity
+            entity_conditions = []
+            for entity in entities:
+                # Escape single quotes in entity name
+                safe_entity = entity.replace("'", "''")
+
+                # Create fuzzy matching conditions for this entity
+                fuzzy_conditions = []
+
+                # Match against asset_name
+                fuzzy_conditions.append(f"""
+                    (1.0 - CAST(levenshtein(LOWER(asset_name), LOWER('{safe_entity}')) AS DOUBLE) /
+                     GREATEST(LENGTH(asset_name), LENGTH('{safe_entity}'))) >= {min_similarity}
+                """)
+
+                # Match against asset_short_name
+                fuzzy_conditions.append(f"""
+                    (1.0 - CAST(levenshtein(LOWER(asset_short_name), LOWER('{safe_entity}')) AS DOUBLE) /
+                     GREATEST(LENGTH(asset_short_name), LENGTH('{safe_entity}'))) >= {min_similarity}
+                """)
+
+                # Match against issuer_name
+                fuzzy_conditions.append(f"""
+                    (1.0 - CAST(levenshtein(LOWER(issuer_name), LOWER('{safe_entity}')) AS DOUBLE) /
+                     GREATEST(LENGTH(issuer_name), LENGTH('{safe_entity}'))) >= {min_similarity}
+                """)
+
+                # Combine conditions for this entity with OR
+                entity_condition = f"({' OR '.join(fuzzy_conditions)})"
+                entity_conditions.append(entity_condition)
+
+            # Combine all entity conditions with OR (match ANY entity)
+            where_clause = f"({' OR '.join(entity_conditions)})"
+
+        # Build final SQL
+        if group_by_fund:
+            sql = f"""
+            WITH ranked_holdings AS (
+                SELECT *,
+                    ROW_NUMBER() OVER (PARTITION BY fund_id ORDER BY portfolio_weight_pct DESC) as rn
+                FROM fund_holdings_detail_view
+                WHERE {where_clause}
+            )
+            SELECT
+                fund_id,
+                cnpj,
+                legal_name,
+                investment_class,
+                asset_name,
+                asset_short_name,
+                issuer_name,
+                portfolio_weight_pct,
+                position_value
+            FROM ranked_holdings
+            WHERE rn = 1
+            ORDER BY portfolio_weight_pct DESC
+            LIMIT {limit}
+            """
+        else:
+            sql = f"""
+            SELECT *
+            FROM fund_holdings_detail_view
+            WHERE {where_clause}
+            ORDER BY portfolio_weight_pct DESC
+            LIMIT {limit}
+            """
+
+        return sql, "fuzzy_llm"
 
     def _simple_text_to_sql(self, query: str) -> tuple[str, str]:
         """

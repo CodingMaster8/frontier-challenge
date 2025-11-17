@@ -9,6 +9,15 @@ from pydantic import BaseModel, Field
 import pandas as pd
 
 
+class EntityExtractionResult(BaseModel):
+    """Result from LLM entity extraction for holdings search"""
+
+    entities: List[str] = Field(
+        default_factory=list,
+        description="Extracted company, bank, or asset names"
+    )
+
+
 class HoldingRecord(BaseModel):
     """A single holding record from fund_holdings_detail_view"""
 

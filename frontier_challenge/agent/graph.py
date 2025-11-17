@@ -33,9 +33,10 @@ from .utils import (
     detect_language,
     format_tool_result,
     _format_semantic_result,
+    _format_holdings_result,
     SafeParser,
 )
-from ..tools import SemanticSearchTool, StructuredFilterTool, FinancialVisualizationTool
+from ..tools import SemanticSearchTool, StructuredFilterTool, FinancialVisualizationTool, HoldingsSearchTool
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,7 @@ def get_financial_agent_graph(
     # Initialize tools
     semantic_tool = SemanticSearchTool(db_path=db_path)
     filter_tool = StructuredFilterTool(db_path=db_path, refine_query=False)
+    holdings_tool = HoldingsSearchTool(db_path=db_path)
     viz_tool = FinancialVisualizationTool(
         library="seaborn",
         image_format="png",
@@ -86,7 +88,7 @@ def get_financial_agent_graph(
         logger.error(f"❌ Error building semantic index: {e}", exc_info=True)
 
     # Tool names and descriptions
-    tool_names = ["semantic_search", "structured_filter"]
+    tool_names = ["semantic_search", "structured_filter", "holdings_search"]
 
     logger.info(f"Registered tools: {tool_names}")
 
@@ -96,6 +98,8 @@ def get_financial_agent_graph(
             semantic_search: Search for funds using natural language query with semantic similarity. This tool uses vector embeddings to find funds based on conceptual similarity rather than exact keyword matches. It's ideal for exploratory searches and fuzzy matching scenarios. Use for natural language queries (e.g., "sustainable tech funds", "conservative bonds"), fuzzy/partial name matching (e.g., "Bradesco gold", "BB renda fixa"), conceptual searches (e.g., "low risk", "ESG investing"), queries in Portuguese or English, finding funds similar to a description or investment strategy, when exact CNPJ or legal name is unknown. Parameters: query (str, required), top_k (int, optional, default=10).
 
             structured_filter: Filter funds using natural language query that gets converted to SQL, or structured criteria. Use this for queries with specific numbers, comparisons, or precise filters like performance metrics (returns, volatility, Sharpe ratio), fees (management, performance, expense ratio), fund size/AUM, investment constraints, classification filters, risk class, or boolean filters. This tool converts natural language to SQL queries against the fund database. Parameters: query (str, optional), criteria (FundFilterCriteria, optional).
+
+            holdings_search: Search for funds that hold specific companies, assets, or securities in their portfolios. This tool enables finding funds by the assets they invest in, using fuzzy matching with Levenshtein distance for company/asset name matching. Use this for queries about: specific company holdings (e.g., "funds that invest in Petrobras", "funds holding Apple stock"), asset exposure (e.g., "funds with Vale holdings", "exposure to Brazilian government bonds"), portfolio composition queries (e.g., "which funds own Amazon?", "funds with Microsoft"), investment in specific issuers or securities. This tool searches the detailed holdings data and can group results by fund or show individual positions. Parameters: query (str, optional), company_name (str, optional), criteria (HoldingsSearchCriteria, optional).
         """.strip()
 
     async def node_greeting(state: AgentState) -> dict:
@@ -281,6 +285,7 @@ def get_financial_agent_graph(
             status_map = {
                 "semantic_search": "searching_funds",
                 "structured_filter": "filtering_data",
+                "holdings_search": "searching_holdings",
             }
             tool_status = status_map.get(tool_name, "processing_results")
 
@@ -407,8 +412,7 @@ def get_financial_agent_graph(
                 "internal_monologue": [
                     ChatMessage(
                         content=f"Tool result:\n{formatted_result}",
-                        role="tool",
-                    )
+                        role="tool"),
                 ],
                 "tool_result_dataframe": [df_bytes] if df_bytes else [],
                 "should_answer_user": [True],
@@ -421,6 +425,68 @@ def get_financial_agent_graph(
                 f"Erro ao filtrar fundos: {str(e)}"
                 if state.user_language == "pt"
                 else f"Error filtering funds: {str(e)}"
+            )
+            return {
+                "internal_monologue": [
+                    ChatMessage(content=f"Tool error: {error_msg}", role="tool")
+                ],
+                "should_answer_user": [True],
+                "current_status": "error",
+            }
+
+    async def node_execute_holdings_search(state: AgentState) -> dict:
+        """Execute holdings search tool."""
+        instruction = state.tool_instructions[-1].content
+
+        logger.info(f"Executing holdings search...")
+        logger.debug(f"Query: {instruction}")
+
+        try:
+            # Execute holdings search
+            result = await holdings_tool.search_holdings(query=instruction)
+
+            logger.info(f"✅ Holdings search completed - found {result.unique_funds_count} funds with matching holdings")
+            logger.debug(f"Search method: {result.search_method}")
+
+            # Format result for display
+            formatted_result = _format_holdings_result(result, state.user_language)
+
+            logger.debug(f"Formatted result preview: {formatted_result[:200]}...")
+
+            # Convert results to DataFrame if available for visualization
+            df = None
+            if result.fund_summaries and len(result.fund_summaries) > 0:
+                df = pd.DataFrame([summary.model_dump() for summary in result.fund_summaries])
+                logger.info(f"Created DataFrame with shape {df.shape}")
+            elif result.holdings and len(result.holdings) > 0:
+                df = pd.DataFrame([holding.model_dump() for holding in result.holdings])
+                logger.info(f"Created DataFrame with shape {df.shape}")
+
+            # Serialize DataFrame
+            df_bytes = None
+            if df is not None:
+                buffer = BytesIO()
+                df.to_pickle(buffer)
+                df_bytes = buffer.getvalue()
+
+            return {
+                "internal_monologue": [
+                    ChatMessage(
+                        content=f"Tool result:\n{formatted_result}",
+                        role="tool",
+                    )
+                ],
+                "tool_result_dataframe": [df_bytes] if df_bytes else [],
+                "should_answer_user": [True],
+                "current_status": "processing_results",
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Error in holdings search: {e}", exc_info=True)
+            error_msg = (
+                f"Erro ao buscar participações: {str(e)}"
+                if state.user_language == "pt"
+                else f"Error searching holdings: {str(e)}"
             )
             return {
                 "internal_monologue": [
@@ -712,6 +778,7 @@ def get_financial_agent_graph(
     workflow.add_node("extract_tool_call", node_extract_tool_call)
     workflow.add_node("semantic_search", node_execute_semantic_search)
     workflow.add_node("structured_filter", node_execute_structured_filter)
+    workflow.add_node("holdings_search", node_execute_holdings_search)
     workflow.add_node("decide_visualization", node_decide_visualization)
     workflow.add_node("generate_visualization", node_generate_visualization)
     workflow.add_node("answer_user_query", node_answer_user_query)
@@ -739,6 +806,7 @@ def get_financial_agent_graph(
     # Tool nodes route to post_tool_router
     workflow.add_conditional_edges("semantic_search", post_tool_router)
     workflow.add_conditional_edges("structured_filter", post_tool_router)
+    workflow.add_conditional_edges("holdings_search", post_tool_router)
 
     # Visualization flow
     workflow.add_conditional_edges("decide_visualization", visualization_router)
