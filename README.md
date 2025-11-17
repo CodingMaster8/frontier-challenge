@@ -1,7 +1,7 @@
-# frontier-challenge
+# FrontierAI
 
 <p align="center">
-    <em>Challenge for Frontier AI</em>
+    <em>AI-Powered Brazilian Investment Funds Discovery and Analysis Platform</em>
 </p>
 
 [![build](https://github.com/codingmaster8/frontier-challenge/workflows/Build/badge.svg)](https://github.com/codingmaster8/frontier-challenge/actions)
@@ -16,38 +16,125 @@
 
 ---
 
-## About the Challenge
-### Frontier - Fund Search
+## Overview
 
-The Challenge
+A production-grade conversational AI agent that enables natural language interaction with a comprehensive database of Brazilian investment funds. The system provides intelligent fund discovery, performance analysis, and automated visualization generation using data from CVM (Comissão de Valores Mobiliários).
 
-Build the underlying tools that give an AI agent the ability to discover Brazilian
-investment funds based on user queries and return their CNPJs.
-You should also create a thin agent layer that uses the tools you build. Keep in
-mind that our focus is on the tools themselves, not the agent: the agent simply
-serves as a natural language interface to your tools.
-You decide what types of search criteria to support and how to handle them.
-For inspiration, users might ask things like "what is the Bradesco gold fund?" or
-"show me some funds that invest in Latin American tech", but these are just
-examples: implement the fund-searching capabilities you find most interesting
-or valuable.
+<p align="center">
+  <img src="docs/images/frontier_semantic.png" alt="Semantic Search Example" width="700"/>
+  <br>
+  <em>Natural language fund search with semantic understanding</em>
+</p>
 
-### Requiremens
+## Key Features
 
-Your solution should include the following:
-Data Collection: Download fund data from CVM (Portal Dados Abertos
-CVM) and other sources you might find interesting (details below). Decide
-what data is relevant for your implementation.
-Tools and Agent: Build the tools you think are useful and expose them to a
-simple agent so it can help find Brazilian funds based on user queries and
-retrieve their CNPJs. The agent can be a CLI chatbot, have a UI, or
-whatever interface you prefer. Our focus is on the fund finding capability;
-the agent doesn't need to be particularly good at anything else.
-Evaluation: Write comprehensive evals to measure the quality of your
-answers and edge case handling. We care as much about how you evaluate
-the tool's quality as we do about the tool itself.
-Once you have completed this task, you should send us a GitHub repository
-with your code and then present it in an online meeting with the team.
+**Natural Language Fund Search**: Query funds using conversational language in Portuguese or English. Find funds by name, strategy, manager, or conceptual descriptions like "sustainable technology investing".
+
+**Multiple Search Modes**:
+- **Semantic Search**: Vector-based similarity search using OpenAI embeddings and Pinecone for fuzzy, conceptual queries
+- **Structured Filters**: Text-to-SQL conversion for precise numeric filtering (returns, fees, AUM, risk metrics)
+- **Holdings Search**: Find funds that invest in specific companies or assets with fuzzy matching
+- **CNPJ Lookup**: Direct fund retrieval by identifier
+
+<p align="center">
+  <img src="docs/images/frontier_filtering.png" alt="Structured Filtering Example" width="700"/>
+  <br>
+  <em>Text-to-SQL conversion for precise fund filtering</em>
+</p>
+
+**Automated Visualizations**: Generate publication-quality charts and graphs automatically based on data analysis and natural language requests using a multi-stage LangGraph workflow.
+
+<p align="center">
+  <img src="docs/images/frontier_visualization.png" alt="Automated Visualization Example" width="700"/>
+  <br>
+  <em>Automatic chart generation from natural language queries</em>
+</p>
+
+**Complete ETL Pipeline**: Download, process, and load CVM lamina data into DuckDB with optimized views for analytical queries.
+
+**LangGraph Architecture**: Sophisticated agent orchestration with state management, tool routing, error recovery, and conversational memory.
+
+**Production Ready**: Type-safe Pydantic models, comprehensive error handling, retry logic, and extensive test coverage.
+
+## Architecture
+
+```
+frontier_challenge/
+├── agent/          # LangGraph-based conversational agent
+├── tools/          # Specialized search and analysis tools
+│   ├── semantic_tool/    # Vector search with Pinecone
+│   ├── sql_tool/         # Text-to-SQL for structured queries
+│   ├── holdings_tool/    # Portfolio holdings search
+│   ├── cnpj_tool/        # Direct CNPJ lookup
+│   └── viz_tool/         # Automatic visualization generation
+├── ingest/         # ETL pipeline for CVM data
+├── db/             # Database view management
+└── settings.py     # Configuration and API keys
+```
+
+
+## Technology Stack
+
+- **Database**: DuckDB for analytical workloads
+- **Vector Search**: Pinecone with OpenAI embeddings (text-embedding-3-small)
+- **Agent Framework**: LangChain/LangGraph for orchestration
+- **LLM**: OpenAI GPT models
+- **Data Processing**: Pandas for ETL
+- **Type Safety**: Pydantic for data validation
+- **Web Interface**: Streamlit application
+
+---
+
+## Quick Start
+
+After installing dependencies, having the local db, and having the views created, Just do on your terminal:
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+```python
+from frontier_challenge.agent import get_financial_agent_graph
+
+# Initialize agent
+graph = get_financial_agent_graph(
+    db_path="data/br_funds.db",
+    model_name="gpt-4o-mini"
+)
+
+# Run query
+response = graph.invoke({
+    "messages": [{"role": "user", "content": "Find large cap equity funds with >15% YTD return"}]
+})
+```
+
+### More Examples
+
+<details>
+<summary>Holdings Search</summary>
+
+<p align="center">
+  <img src="docs/images/frontier_holdings.png" alt="Holdings Search Example" width="700"/>
+  <br>
+  <em>Find funds that invest in specific companies</em>
+</p>
+
+</details>
+
+<details>
+<summary>CNPJ Direct Lookup</summary>
+
+<p align="center">
+  <img src="docs/images/frontier_cnpj.png" alt="CNPJ Lookup Example" width="700"/>
+  <br>
+  <em>Quick fund information retrieval by CNPJ</em>
+</p>
+
+</details>
+
+---
+
+
 
 
 
