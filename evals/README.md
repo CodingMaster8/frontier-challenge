@@ -2,7 +2,7 @@
 
 Production-grade evaluation suite for the Financial Agent and its tools. This framework provides comprehensive testing and quality metrics for all agent components.
 
-## 📋 Overview
+##  Overview
 
 This evaluation framework quantifies the accuracy, performance, and robustness of:
 
@@ -11,7 +11,7 @@ This evaluation framework quantifies the accuracy, performance, and robustness o
 - **Holdings Search Tool** (Fuzzy matching with Levenshtein distance)
 - **Agent Routing** (Tool selection logic)
 
-## 🏗️ Architecture
+##  Architecture
 
 ```
 evals/
@@ -32,7 +32,7 @@ evals/
 └── results/                    # Evaluation results (generated)
 ```
 
-## 🎯 Metrics
+##  Metrics
 
 ### Accuracy Metrics
 - **Accuracy**: Ratio of correct predictions/results
@@ -49,7 +49,7 @@ evals/
 - **Completeness**: Whether all required fields are present
 - **Robustness**: How well tools handle edge cases
 
-## 🧪 Test Cases
+## Test Cases
 
 ### Semantic Search Tool
 - **Basic Cases** (18 total): Company names, investment types, ESG queries, risk profiles
@@ -79,7 +79,7 @@ evals/
 - **Ambiguous Cases** (2): Queries that could use multiple tools
 - **Multi-Tool Cases** (2): Queries requiring multiple tools in sequence
 
-## 🚀 Usage
+## Usage
 
 ### Run Individual Tool Evaluations
 
@@ -117,7 +117,7 @@ Results are saved in `evals/results/`:
 - `comprehensive_eval_YYYYMMDD_HHMMSS.json` - All results
 - `eval_report_YYYYMMDD_HHMMSS.html` - HTML report
 
-## 📊 Interpreting Results
+##  Interpreting Results
 
 ### Pass/Fail Thresholds
 
@@ -180,7 +180,7 @@ HOLDINGS_SEARCH
   Avg Latency: 421.18ms
 ```
 
-## 🔧 Adding New Test Cases
+##  Adding New Test Cases
 
 ### 1. Create a Test Case
 
@@ -214,7 +214,7 @@ Add your case to the appropriate file in `evals/test_cases/`:
 python -m evals.run_semantic_eval  # Or appropriate evaluator
 ```
 
-## 🎨 Custom Metrics
+##  Custom Metrics
 
 You can add custom metrics by extending the `Metric` base class:
 
@@ -238,7 +238,7 @@ evaluator = AgentEvaluator()
 evaluator.metrics.append(CustomMetric())
 ```
 
-## 🐛 Debugging Failed Tests
+##  Debugging Failed Tests
 
 ### View Failed Cases
 
@@ -268,7 +268,7 @@ edge_cases = get_cases_by_tags(['edge_case'])
 fuzzy_cases = get_cases_by_tags(['fuzzy'])
 ```
 
-## 📈 Continuous Integration
+##  Continuous Integration
 
 ### GitHub Actions Example
 
@@ -301,34 +301,3 @@ jobs:
           name: eval-results
           path: evals/results/
 ```
-
-## 🔍 Best Practices
-
-1. **Run evaluations regularly**: After any tool changes or improvements
-2. **Monitor edge cases**: Pay special attention to edge case pass rates
-3. **Track metrics over time**: Keep historical results to track improvements
-4. **Investigate failures**: Every failed case is an opportunity to improve
-5. **Update test cases**: Add new cases when you discover new edge cases
-6. **Set realistic thresholds**: Balance between quality and achievability
-7. **Test with real data**: Use actual database for realistic results
-
-## 📝 Notes
-
-- Evaluations require active database connection (`data/br_funds.db`)
-- Semantic search requires Pinecone and OpenAI API keys
-- First run will be slower due to index building
-- Results are deterministic for regression testing
-- All evaluations are async for better performance
-
-## 🤝 Contributing
-
-To add new evaluation capabilities:
-
-1. Define new test cases in `test_cases/`
-2. Add new metrics in `metrics.py` if needed
-3. Update the appropriate runner script
-4. Update this README with documentation
-
-## 📄 License
-
-Same as parent project.
