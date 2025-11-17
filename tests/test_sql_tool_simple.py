@@ -12,14 +12,15 @@ def sql_tool():
     return StructuredFilterTool(db_path="data/br_funds.db")
 
 
-def test_filter_with_min_return_ytd(sql_tool):
+@pytest.mark.asyncio
+async def test_filter_with_min_return_ytd(sql_tool):
     """Test filtering funds by minimum YTD return"""
     criteria = FundFilterCriteria(
         min_return_ytd=10.0,
         limit=5
     )
 
-    result = sql_tool.filter_funds(criteria=criteria)
+    result = await sql_tool.structured_filter(criteria=criteria)
 
     assert result.success is True
     assert result.total_count <= 5
@@ -32,14 +33,15 @@ def test_filter_with_min_return_ytd(sql_tool):
             assert fund.return_ytd_2024_avg > 10.0
 
 
-def test_filter_with_max_management_fee(sql_tool):
+@pytest.mark.asyncio
+async def test_filter_with_max_management_fee(sql_tool):
     """Test filtering funds by maximum management fee"""
     criteria = FundFilterCriteria(
         max_management_fee=2.0,
         limit=10
     )
 
-    result = sql_tool.filter_funds(criteria=criteria)
+    result = await sql_tool.structured_filter(criteria=criteria)
 
     assert result.success is True
     assert result.sql_query is not None
@@ -51,21 +53,23 @@ def test_filter_with_max_management_fee(sql_tool):
             assert fund.management_fee_pct < 2.0
 
 
-def test_filter_with_min_nav(sql_tool):
+@pytest.mark.asyncio
+async def test_filter_with_min_nav(sql_tool):
     """Test filtering funds by minimum net asset value"""
     criteria = FundFilterCriteria(
         min_nav=100_000_000,  # R$ 100M
         limit=5
     )
 
-    result = sql_tool.filter_funds(criteria=criteria)
+    result = await sql_tool.structured_filter(criteria=criteria)
 
     assert result.success is True
     assert result.sql_query is not None
     assert "nav > 100000000" in result.sql_query
 
 
-def test_filter_with_multiple_criteria(sql_tool):
+@pytest.mark.asyncio
+async def test_filter_with_multiple_criteria(sql_tool):
     """Test filtering with multiple criteria combined"""
     criteria = FundFilterCriteria(
         min_return_ytd=5.0,
@@ -74,7 +78,7 @@ def test_filter_with_multiple_criteria(sql_tool):
         limit=10
     )
 
-    result = sql_tool.filter_funds(criteria=criteria)
+    result = await sql_tool.structured_filter(criteria=criteria)
 
     assert result.success is True
     assert result.sql_query is not None
@@ -83,20 +87,22 @@ def test_filter_with_multiple_criteria(sql_tool):
     assert "nav > 50000000" in result.sql_query
 
 
-def test_filter_with_no_criteria_returns_error(sql_tool):
+@pytest.mark.asyncio
+async def test_filter_with_no_criteria_returns_error(sql_tool):
     """Test that filtering without query or criteria returns error"""
-    result = sql_tool.filter_funds()
+    result = await sql_tool.structured_filter()
 
     assert result.success is False
     assert result.error_message is not None
     assert "Must provide query, criteria, or template" in result.error_message
 
 
-def test_result_has_execution_time(sql_tool):
+@pytest.mark.asyncio
+async def test_result_has_execution_time(sql_tool):
     """Test that results include execution time"""
     criteria = FundFilterCriteria(limit=5)
 
-    result = sql_tool.filter_funds(criteria=criteria)
+    result = await sql_tool.structured_filter(criteria=criteria)
 
     assert result.success is True
     assert result.execution_time_ms is not None

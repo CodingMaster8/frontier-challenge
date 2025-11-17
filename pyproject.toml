@@ -13,7 +13,7 @@ dynamic = ["version", "dependencies", "optional-dependencies"]
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 
 [tool.hatch.metadata.hooks.requirements_txt]
 files = ["requirements.txt"]
@@ -29,12 +29,13 @@ allow-direct-references = true
 path = "frontier_challenge/__about__.py"
 
 [tool.hatch.envs.default]
-python = "3.12"
+python = "3.14"
 dependencies = [
     "mypy",
     "ruff",
     "pre-commit",
     "pytest",
+    "pytest-asyncio",
     "pytest-cov",
     "mkdocs-material",
     "mkdocstrings[python]",
