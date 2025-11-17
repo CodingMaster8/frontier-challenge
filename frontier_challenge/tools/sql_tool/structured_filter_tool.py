@@ -99,7 +99,7 @@ class StructuredFilterTool:
             logger.error(f"Error loading view schema: {e}")
             return "Schema information not available"
 
-    def filter_funds(
+    async def structured_filter(
         self,
         query: Optional[str] = None,
         criteria: Optional[FundFilterCriteria] = None,
@@ -126,7 +126,7 @@ class StructuredFilterTool:
             if criteria:
                 sql_query = self._criteria_to_sql(criteria)
             elif query:
-                sql_query = self._text_to_sql(query)
+                sql_query = await self._text_to_sql(query)
             else:
                 return FilterResult(
                     success=False,
@@ -229,7 +229,7 @@ class StructuredFilterTool:
 
         return sql
 
-    def _text_to_sql(self, query: str) -> str:
+    async def _text_to_sql(self, query: str) -> str:
         """Convert natural language query to SQL using LangGraph workflow"""
         # Build the workflow
         workflow = get_graph(self.db_path, self.max_retries, self.refine_query)
@@ -240,8 +240,8 @@ class StructuredFilterTool:
             "view_schema": self.view_schema,
         }
 
-        # Type annotation: tell Python we expect FilterQueryState (or dict)
-        final_state_raw = asyncio.run(workflow.ainvoke(initial_state))
+        # Use await since we're in async context
+        final_state_raw = await workflow.ainvoke(initial_state)
 
         # Handle both dict and FilterQueryState instances
         # LangGraph may return either depending on version

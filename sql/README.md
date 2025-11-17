@@ -245,7 +245,7 @@ Run the examples provided in each SQL file's comment section.
 
 ## Design Decisions ✅
 
-### What We DID:
+### What I DID:
 - ✅ **Latest snapshot only** - Filter by `MAX(timestamp)` to avoid historical duplicates
 - ✅ **Only ACTIVE funds** - Filter `status = 'ACTIVE'` to exclude cancelled funds
 - ✅ **CNPJ extraction** - Consistently extract from `identifiers[1].value`
@@ -254,7 +254,7 @@ Run the examples provided in each SQL file's comment section.
 - ✅ **Type casting** - All numeric fields cast with `TRY_CAST` to handle nulls
 - ✅ **Separate views** - Optimized for different query patterns
 
-### What We DIDN'T DO:
+### What I DIDN'T DO:
 - ❌ **No denormalization** - Keep time-series data separate
 - ❌ **No all snapshots** - Would make searches exponentially slower
 - ❌ **No embedding in view** - Embeddings generated separately and stored
@@ -262,64 +262,14 @@ Run the examples provided in each SQL file's comment section.
 
 ---
 
-## Next Steps
-
-### Phase 1: Semantic Search Tool
-1. Generate embeddings for `searchable_text` using sentence-transformers
-2. Store embeddings (DuckDB doesn't have native vector support, so use external vector DB or store as arrays)
-3. Implement cosine similarity search
-4. Build tool wrapper that takes query → returns CNPJs
-
-### Phase 2: Structured Filter Tool (Text-to-SQL)
-1. Build LLM-based text-to-SQL converter
-2. Use view schema as context for SQL generation
-3. Add safety guards (read-only, query validation)
-4. Build tool wrapper with structured parameters
-
-### Phase 3: Portfolio Analysis Tool
-1. Similar to structured filter but focused on holdings
-2. Can use semantic search on `financial_instrument_description`
-3. Combine with asset name matching
-
-### Phase 4: Router + Agent
-1. LLM function calling to choose tool(s)
-2. Route queries to appropriate view(s)
-3. Combine results if multiple tools used
-4. Format output with CNPJs + relevant metadata
-
----
-
 ## Performance Notes
 
 - **View refresh**: These are regular views (not materialized), so they compute on each query
 - **For production**: Consider materializing views and refreshing daily/weekly
-- **Indexing**: Add indexes on `cnpj`, `fund_id`, `timestamp` for faster joins
-- **Embeddings**: Store separately for better performance (DuckDB arrays are not optimized for similarity search)
 
 ---
-
-## Files in This Directory
-
-```
-sql/
-├── 00_create_all_views.sql              # Master script to create all views
-├── 01_create_semantic_search_view.sql   # View 1: Semantic search
-├── 02_create_structured_filter_view.sql # View 2: Structured filtering
-├── 03_create_portfolio_analysis_view.sql # View 3: Portfolio analysis
-└── README.md                             # This file
-```
-
----
-
-## Questions?
 
 - **Why not use DuckDB's vector extension?** At the time of writing, it's experimental. Easier to use external vector store (Chroma, Pinecone) or simple cosine similarity.
 - **Why separate holdings detail view?** Performance - the main view aggregates, detail view is for deep dives.
 - **Can I combine queries across views?** Yes! The router can call multiple tools and merge results.
 - **What about caching?** Views compute on-demand. Add materialized views or application-layer caching for production.
-
----
-
-**Author**: GitHub Copilot
-**Date**: November 2024
-**Purpose**: Frontier AI Challenge - Brazilian Fund Search System

@@ -52,8 +52,7 @@ Fund characteristics:
 1. **Always use fund_structured_filter_view** - Never reference other tables
 
 2. **SELECT clause**:
-   - Select all columns with SELECT * for simplicity
-   - Or select specific columns if the query asks for specific fields
+   - ALWAYS Select all columns with SELECT * for simplicity
 
 3. **WHERE clause**:
    - Convert natural language conditions to SQL WHERE conditions

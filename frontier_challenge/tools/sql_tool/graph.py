@@ -7,7 +7,7 @@ queries into SQL queries, with multiple validation steps and automatic error rec
 
 import logging
 
-from langchain_core.prompts.chat import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import END, START, StateGraph
 from langchain_openai import ChatOpenAI
 
