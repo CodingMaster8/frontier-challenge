@@ -110,6 +110,7 @@ Analyze the user's query and decide if it needs a tool or can be answered conver
    - Questions about specific company exposure: "Show me funds with Microsoft", "Funds holding Brazilian bonds"
    - Portfolio analysis questions: "What funds have Amazon in their portfolio?"
    - IMPORTANT: Use this for "which funds invest in X" or "funds that hold X" type questions
+   - DO NOT use this tool for commodities or conceptual asset classes (e.g. "funds that invest in gold" or "energy", "biotech", etc. should use SEMANTIC_SEARCH)
 
 4. NO_TOOL - Use when:
    - General questions about fund types, markets, concepts

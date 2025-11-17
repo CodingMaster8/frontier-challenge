@@ -138,12 +138,12 @@ class HoldingsSearchTool:
                 "format_instructions": parser.get_format_instructions()
             })
 
-            logger.info(f"✅ Extracted {len(result.entities)} entities: {result.entities}")
+            logger.info(f"Extracted {len(result.entities)} entities: {result.entities}")
 
             return result
 
         except Exception as e:
-            logger.error(f"❌ Error extracting entities: {e}", exc_info=True)
+            logger.error(f"Error extracting entities: {e}", exc_info=True)
             # Fallback to empty list
             return EntityExtractionResult(entities=[])
 
