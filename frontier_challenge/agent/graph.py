@@ -448,9 +448,9 @@ def get_financial_agent_graph(
 
         # Add conversation history - limit to last 10 messages for efficiency
         internal_monologue = state.internal_monologue or []
-        recent_monologue = internal_monologue[-10:] if len(internal_monologue) > 10 else internal_monologue
+        recent_monologue = internal_monologue[-15:] if len(internal_monologue) > 15 else internal_monologue
 
-        if len(internal_monologue) > 10:
+        if len(internal_monologue) > 15:
             logger.debug(f"Limiting context window: using last 10 of {len(internal_monologue)} messages")
 
         messages.extend(transform_roles(recent_monologue))
@@ -494,7 +494,18 @@ def get_financial_agent_graph(
         language = state.user_language
         tool_name = state.tool_invocations[-1].content
 
-        logger.info("🎨 Deciding if visualization is needed...")
+        logger.info("Deciding if visualization is needed...")
+
+        if state.should_generate_visualization and len(state.should_generate_visualization) > 0:
+            viz_enabled = state.should_generate_visualization[-1]
+            if not viz_enabled:
+                logger.info("Lightning Mode enabled by user settings - skipping visualization")
+                return {
+                    "should_generate_visualization": [False],
+                    "visualization_reasoning": ["Lightning mode enabled by user"],
+                    "visualization_results": [[]],  # Clear previous visualizations
+                    "current_status": "processing_results",
+                }
 
         # Only consider visualization for structured_filter tool
         if tool_name != "structured_filter":
@@ -590,7 +601,7 @@ def get_financial_agent_graph(
             viz_tool.language = viz_language
 
             logger.info(f"Generating visualization for {len(df)} results")
-            logger.debug(f"DataFrame columns: {df.columns.tolist()}")
+            logger.info(f"User query: {user_message}")
 
             # Generate visualization
             viz_results = await viz_tool.create_visualization(

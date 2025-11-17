@@ -59,7 +59,7 @@ def get_visualization_graph(
     ).with_retry()
 
     llm_main = ChatOpenAI(
-        model="gpt-4o",
+        model="gpt-5.1",
         temperature=0.3,
         openai_api_key=OPENAI_API_KEY
     ).with_retry()
@@ -136,11 +136,20 @@ def get_visualization_graph(
 
             logger.info(f"Generating code for visualization {i}: {visualization_description.short_question}")
 
+            combined_context = ""
+            if state.visualization_context:
+                combined_context += f"Context: {state.visualization_context}"
+            if state.visualization_prompt:
+                if combined_context:
+                    combined_context += f"\n\nUser Prompt: {state.visualization_prompt}"
+                else:
+                    combined_context = state.visualization_prompt
+
             code = generate_visualization_code(
                 state.data_summary,
                 visualization_description,
                 previous_messages=previous_messages,
-                context=state.visualization_context or state.visualization_prompt or "",
+                context=combined_context,
                 library=library,
                 language=language,
                 llm=llm_code,

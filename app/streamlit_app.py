@@ -117,6 +117,9 @@ if "agent_graph" not in st.session_state:
         st.session_state.thread_id = "streamlit-session-1"
         logger.info("✅ Agent graph initialized successfully")
 
+if "viz_mode_lightning" not in st.session_state:
+    st.session_state.viz_mode_lightning = False
+
 # Sidebar
 with st.sidebar:
     # Display the frontier logo
@@ -152,6 +155,18 @@ with st.sidebar:
     if st.session_state.language != lang_code:
         st.session_state.language = lang_code
         st.session_state.initialized = False  # Reset to show greeting in new language
+        st.rerun()
+
+    lightning_mode = st.toggle(
+        "Lightning Mode" if st.session_state.language == "en"
+        else "Modo Relâmpago",
+        value=st.session_state.viz_mode_lightning,
+        key="lightning_toggle",
+        help="Skip visualizations for faster responses" if st.session_state.language == "en"
+             else "Pular visualizações para respostas mais rápidas"
+    )
+    if st.session_state.viz_mode_lightning != lightning_mode:
+        st.session_state.viz_mode_lightning = lightning_mode
 
     if st.button("🔄 Clear Conversation"):
         st.session_state.messages = []
@@ -227,11 +242,13 @@ if prompt := st.chat_input("Ask me about Brazilian funds..." if st.session_state
                 """Run agent and stream status updates."""
                 last_status = "idle"
 
+                logger.info(f"📊 Will generate viz: {not st.session_state.viz_mode_lightning}")
                 # Stream through the graph execution
                 async for event in st.session_state.agent_graph.astream(
                     {
                         "messages": [HumanMessage(content=prompt)],
-                        "user_language": st.session_state.language
+                        "user_language": st.session_state.language,
+                        "should_generate_visualization": [not st.session_state.viz_mode_lightning]
                     },
                     config=config
                 ):

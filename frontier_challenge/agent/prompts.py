@@ -95,6 +95,7 @@ Analyze the user's query and decide if it needs a tool or can be answered conver
    - Queries with comparisons: >, <, between, top N
    - Multiple filter conditions combined
    - Examples: "Funds with >15% return and <2% fees", "Top 10 funds by AUM"
+   - When the user requests a visualization or plot based on specific criteria or CNPJ numbers.
 
 3. NO_TOOL - Use when:
    - General questions about fund types, markets, concepts
