@@ -1,0 +1,272 @@
+"""Test cases for Structured Filter Tool (SQL) evaluation."""
+
+from ..models import EvalCase, ToolType
+
+# Structured Filter Test Cases
+STRUCTURED_FILTER_CASES = [
+    # Basic filter cases
+    EvalCase(
+        id="sql_001",
+        name="Min return YTD filter",
+        description="Filter funds with minimum YTD return",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with returns above 10% this year",
+        min_results=1,
+        expected_sql_pattern="return_ytd",
+        tags=["basic", "return_filter"],
+    ),
+    EvalCase(
+        id="sql_002",
+        name="Management fee filter",
+        description="Filter by maximum management fee",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with management fees below 2%",
+        min_results=5,
+        expected_sql_pattern="management_fee",
+        tags=["basic", "fee_filter"],
+    ),
+    EvalCase(
+        id="sql_003",
+        name="NAV size filter",
+        description="Filter by minimum fund size (NAV)",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="large funds with more than 100 million reais",
+        min_results=5,
+        expected_sql_pattern="nav",
+        tags=["basic", "size_filter"],
+    ),
+    EvalCase(
+        id="sql_004",
+        name="Risk class filter",
+        description="Filter by risk classification",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="low risk funds",
+        min_results=5,
+        expected_sql_pattern="risk",
+        tags=["basic", "risk_filter"],
+    ),
+    EvalCase(
+        id="sql_005",
+        name="Multiple criteria filter",
+        description="Filter with multiple conditions",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with returns above 8%, fees below 2%, and size over 50 million",
+        min_results=1,
+        expected_sql_pattern="AND",
+        tags=["basic", "multiple_criteria"],
+    ),
+
+    # Comparison operators
+    EvalCase(
+        id="sql_006",
+        name="Greater than comparison",
+        description="Test > operator",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with Sharpe ratio greater than 1.5",
+        min_results=1,
+        expected_sql_pattern=">",
+        tags=["comparison", "greater_than"],
+    ),
+    EvalCase(
+        id="sql_007",
+        name="Less than comparison",
+        description="Test < operator",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with volatility less than 5%",
+        min_results=1,
+        expected_sql_pattern="<",
+        tags=["comparison", "less_than"],
+    ),
+    EvalCase(
+        id="sql_008",
+        name="Between range filter",
+        description="Test BETWEEN operator",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with returns between 5% and 15%",
+        min_results=1,
+        expected_sql_pattern="BETWEEN",
+        tags=["comparison", "range"],
+    ),
+
+    # Performance metrics
+    EvalCase(
+        id="sql_009",
+        name="12-month return filter",
+        description="Filter by 12-month performance",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with 12 month returns above 20%",
+        min_results=1,
+        expected_sql_pattern="return_12m",
+        tags=["performance", "return_12m"],
+    ),
+    EvalCase(
+        id="sql_010",
+        name="Volatility filter",
+        description="Filter by volatility metrics",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="low volatility funds below 3%",
+        min_results=1,
+        expected_sql_pattern="volatility",
+        tags=["performance", "volatility"],
+    ),
+
+    # Edge cases
+    EvalCase(
+        id="sql_edge_001",
+        name="Conflicting criteria",
+        description="Query with impossible conditions",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with returns above 50% and fees below 0.1%",
+        max_results=5,
+        edge_case=True,
+        tags=["edge_case", "conflicting"],
+    ),
+    EvalCase(
+        id="sql_edge_002",
+        name="NULL value handling",
+        description="Query that may hit NULL values",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with performance fee data",
+        min_results=1,
+        edge_case=True,
+        tags=["edge_case", "null_handling"],
+    ),
+    EvalCase(
+        id="sql_edge_003",
+        name="Extreme value filter",
+        description="Query with extreme thresholds",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with NAV above 10 billion reais",
+        min_results=0,
+        edge_case=True,
+        tags=["edge_case", "extreme_values"],
+    ),
+    EvalCase(
+        id="sql_edge_004",
+        name="Negative value filter",
+        description="Query for negative returns",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with negative returns this year",
+        min_results=1,
+        edge_case=True,
+        tags=["edge_case", "negative_values"],
+    ),
+    EvalCase(
+        id="sql_edge_005",
+        name="Complex boolean logic",
+        description="Query with OR and AND combinations",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with (returns above 15% OR Sharpe ratio above 2) AND fees below 1.5%",
+        min_results=1,
+        edge_case=True,
+        tags=["edge_case", "complex_logic"],
+    ),
+    EvalCase(
+        id="sql_edge_006",
+        name="Ambiguous query",
+        description="Vague query that's hard to convert to SQL",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="good performing funds",
+        min_results=1,
+        edge_case=True,
+        tags=["edge_case", "ambiguous"],
+    ),
+    EvalCase(
+        id="sql_edge_007",
+        name="Very specific numeric threshold",
+        description="Query with precise decimal values",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with exactly 1.234% management fee",
+        max_results=10,
+        edge_case=True,
+        tags=["edge_case", "precise_values"],
+    ),
+    EvalCase(
+        id="sql_edge_008",
+        name="Date-based filter",
+        description="Query involving time-based criteria",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds created in 2020",
+        min_results=1,
+        edge_case=True,
+        tags=["edge_case", "date_filter"],
+    ),
+
+    # SQL injection prevention
+    EvalCase(
+        id="sql_security_001",
+        name="SQL injection attempt",
+        description="Query with SQL injection patterns",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds'; DROP TABLE funds; --",
+        should_fail=False,  # Should handle gracefully
+        edge_case=True,
+        tags=["security", "sql_injection"],
+    ),
+    EvalCase(
+        id="sql_security_002",
+        name="Special SQL characters",
+        description="Query with SQL special characters",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds with name containing % or _",
+        min_results=0,
+        edge_case=True,
+        tags=["security", "special_chars"],
+    ),
+
+    # Ordering and sorting
+    EvalCase(
+        id="sql_sort_001",
+        name="Sort by return descending",
+        description="Query with sorting requirements",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="top performing funds sorted by return",
+        min_results=5,
+        expected_sql_pattern="ORDER BY",
+        tags=["sorting", "order_by"],
+    ),
+    EvalCase(
+        id="sql_sort_002",
+        name="Sort by multiple columns",
+        description="Query requiring multi-column sort",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="funds sorted by risk then by return",
+        min_results=5,
+        expected_sql_pattern="ORDER BY",
+        tags=["sorting", "multi_sort"],
+    ),
+
+    # Classification filters
+    EvalCase(
+        id="sql_class_001",
+        name="Investment class filter",
+        description="Filter by investment classification",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="multimercado funds",
+        min_results=5,
+        expected_sql_pattern="class",
+        tags=["classification", "investment_class"],
+    ),
+    EvalCase(
+        id="sql_class_002",
+        name="Fixed income filter",
+        description="Filter for fixed income funds",
+        tool_type=ToolType.STRUCTURED_FILTER,
+        input_query="renda fixa funds",
+        min_results=5,
+        expected_sql_pattern="renda fixa",
+        tags=["classification", "fixed_income"],
+    ),
+]
+
+
+def get_structured_filter_suite():
+    """Get the complete structured filter evaluation suite."""
+    from ..evaluator import EvalSuite
+
+    return EvalSuite(
+        name="Structured Filter Tool Evaluation",
+        description="Comprehensive evaluation of the SQL-based structured filter tool with NL2SQL capabilities",
+        cases=STRUCTURED_FILTER_CASES,
+        tool_type=ToolType.STRUCTURED_FILTER,
+    )

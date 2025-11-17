@@ -1,0 +1,15 @@
+"""
+Pytest configuration and fixtures
+"""
+import pytest
+
+
+# Configure pytest-asyncio
+pytest_plugins = ('pytest_asyncio',)
+
+
+@pytest.fixture(scope="session")
+def event_loop_policy():
+    """Set event loop policy for async tests"""
+    import asyncio
+    return asyncio.get_event_loop_policy()
