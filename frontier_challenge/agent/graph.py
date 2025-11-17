@@ -1,6 +1,5 @@
 """Main graph definition for the Financial Agent."""
 
-import datetime
 import logging
 from io import BytesIO
 from typing import Optional
@@ -32,8 +31,9 @@ from .utils import (
     format_tool_result,
     _format_semantic_result,
     _format_holdings_result,
+    _format_cnpj_result,
 )
-from ..tools import SemanticSearchTool, StructuredFilterTool, FinancialVisualizationTool, HoldingsSearchTool
+from ..tools import SemanticSearchTool, StructuredFilterTool, FinancialVisualizationTool, HoldingsSearchTool, CNPJLookupTool
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,7 @@ def get_financial_agent_graph(
     semantic_tool = SemanticSearchTool(db_path=db_path)
     filter_tool = StructuredFilterTool(db_path=db_path, refine_query=False)
     holdings_tool = HoldingsSearchTool(db_path=db_path)
+    cnpj_tool = CNPJLookupTool(db_path=db_path)
     viz_tool = FinancialVisualizationTool(
         library="seaborn",
         image_format="png",
@@ -85,7 +86,7 @@ def get_financial_agent_graph(
         logger.error(f"❌ Error building semantic index: {e}", exc_info=True)
 
     # Tool names and descriptions
-    tool_names = ["semantic_search", "structured_filter", "holdings_search"]
+    tool_names = ["semantic_search", "structured_filter", "holdings_search", "cnpj_lookup"]
 
     logger.info(f"Registered tools: {tool_names}")
 
@@ -96,7 +97,9 @@ def get_financial_agent_graph(
 
             structured_filter: Filter funds using natural language query that gets converted to SQL, or structured criteria. Use this for queries with specific numbers, comparisons, or precise filters like performance metrics (returns, volatility, Sharpe ratio), fees (management, performance, expense ratio), fund size/AUM, investment constraints, classification filters, risk class, or boolean filters. This tool converts natural language to SQL queries against the fund database. Parameters: query (str, optional), criteria (FundFilterCriteria, optional).
 
-            holdings_search: Search for funds that hold specific companies, assets, or securities in their portfolios. This tool enables finding funds by the assets they invest in, using fuzzy matching with Levenshtein distance for company/asset name matching. Use this for queries about: specific company holdings (e.g., "funds that invest in Petrobras", "funds holding Apple stock"), asset exposure (e.g., "funds with Vale holdings", "exposure to Brazilian government bonds"), portfolio composition queries (e.g., "which funds own Amazon?", "funds with Microsoft"), investment in specific issuers or securities. This tool searches the detailed holdings data and can group results by fund or show individual positions. Parameters: query (str, optional), company_name (str, optional), criteria (HoldingsSearchCriteria, optional).
+            holdings_search: Search for funds that hold specific companies, assets, or securities in their portfolios. This tool enables finding funds by the assets they invest in, using fuzzy matching with Levenshtein distance for company/asset name matching. Use this for queries about: specific company holdings (e.g., "funds that invest in Petrobras", "funds holding Apple stock"), asset exposure (e.g., "funds with Vale holdings", "exposure to Brazilian government bonds"), portfolio composition queries (e.g., "which funds own Amazon?", "funds with Microsoft"), investment in specific issuers or securities. Don't use it for commodities like gold, energy, etc. This tool searches the detailed holdings data and can group results by fund or show individual positions. Parameters: query (str, optional), company_name (str, optional), criteria (HoldingsSearchCriteria, optional).
+
+            cnpj_lookup: Look up fund information by CNPJ identifier(s). This tool provides fast direct lookup of fund details using one or more CNPJ numbers. Use this when the user explicitly provides a CNPJ number or asks for details of specific funds by CNPJ. Examples: "give me details of 12.345.678/0001-90", "what are the fees for CNPJ 98765432000100?", "can you give me details of those funds?" (when CNPJs are in context/memory), "show me information about funds [list of CNPJs]". The tool accepts both formatted (12.345.678/0001-90) and unformatted (12345678000190) CNPJ numbers. It returns key fund information including legal name, type, fees, net asset value, and minimum investment. Parameters: cnpj (str or List[str], required).
         """.strip()
 
     async def node_greeting(state: AgentState) -> dict:
@@ -283,6 +286,7 @@ def get_financial_agent_graph(
                 "semantic_search": "searching_funds",
                 "structured_filter": "filtering_data",
                 "holdings_search": "searching_holdings",
+                "cnpj_lookup": "looking_up_cnpj",
             }
             tool_status = status_map.get(tool_name, "processing_results")
 
@@ -309,7 +313,7 @@ def get_financial_agent_graph(
             ]
 
         elif tool_name == "unknown_capability":
-            logger.info("❓ Unknown capability detected")
+            logger.info("Unknown capability detected")
             return_dict["current_status"] = "generating_response"
             return_dict["visualization_results"] = [[]]  # Clear previous visualizations
             return_dict["internal_monologue"] = [
@@ -484,6 +488,65 @@ def get_financial_agent_graph(
                 f"Erro ao buscar participações: {str(e)}"
                 if state.user_language == "pt"
                 else f"Error searching holdings: {str(e)}"
+            )
+            return {
+                "internal_monologue": [
+                    ChatMessage(content=f"Tool error: {error_msg}", role="tool")
+                ],
+                "should_answer_user": [True],
+                "current_status": "error",
+            }
+
+    async def node_execute_cnpj_lookup(state: AgentState) -> dict:
+        """Execute CNPJ lookup tool."""
+        instruction = state.tool_instructions[-1].content
+
+        logger.info(f"Executing CNPJ lookup...")
+        logger.debug(f"Instruction: {instruction}")
+
+        try:
+            # Parse the instruction to extract CNPJ(s)
+            # The instruction should contain the CNPJ(s) to lookup
+            result = cnpj_tool.lookup_by_cnpj(cnpj=instruction)
+
+            logger.info(f"✅ CNPJ lookup completed - found {result.total_count} fund(s)")
+
+            # Format result for display
+            formatted_result = _format_cnpj_result(result, state.user_language)
+
+            logger.debug(f"Formatted result preview: {formatted_result[:200]}...")
+
+            # Convert results to DataFrame if available
+            df = None
+            if result.funds and len(result.funds) > 0:
+                df = pd.DataFrame([fund.model_dump() for fund in result.funds])
+                logger.info(f"Created DataFrame with shape {df.shape}")
+
+            # Serialize DataFrame
+            df_bytes = None
+            if df is not None:
+                buffer = BytesIO()
+                df.to_pickle(buffer)
+                df_bytes = buffer.getvalue()
+
+            return {
+                "internal_monologue": [
+                    ChatMessage(
+                        content=f"Tool result:\n{formatted_result}",
+                        role="tool",
+                    )
+                ],
+                "tool_result_dataframe": [df_bytes] if df_bytes else [],
+                "should_answer_user": [True],
+                "current_status": "processing_results",
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Error in CNPJ lookup: {e}", exc_info=True)
+            error_msg = (
+                f"Erro ao buscar CNPJ: {str(e)}"
+                if state.user_language == "pt"
+                else f"Error looking up CNPJ: {str(e)}"
             )
             return {
                 "internal_monologue": [
@@ -776,6 +839,7 @@ def get_financial_agent_graph(
     workflow.add_node("semantic_search", node_execute_semantic_search)
     workflow.add_node("structured_filter", node_execute_structured_filter)
     workflow.add_node("holdings_search", node_execute_holdings_search)
+    workflow.add_node("cnpj_lookup", node_execute_cnpj_lookup)
     workflow.add_node("decide_visualization", node_decide_visualization)
     workflow.add_node("generate_visualization", node_generate_visualization)
     workflow.add_node("answer_user_query", node_answer_user_query)
@@ -804,6 +868,7 @@ def get_financial_agent_graph(
     workflow.add_conditional_edges("semantic_search", post_tool_router)
     workflow.add_conditional_edges("structured_filter", post_tool_router)
     workflow.add_conditional_edges("holdings_search", post_tool_router)
+    workflow.add_conditional_edges("cnpj_lookup", post_tool_router)
 
     # Visualization flow
     workflow.add_conditional_edges("decide_visualization", visualization_router)

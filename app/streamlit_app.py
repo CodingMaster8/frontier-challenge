@@ -40,6 +40,7 @@ STATUS_MESSAGES = {
         "error": "Error occurred",
         "refining_query": "Refining your query...",
         "searching_holdings": "Searching fund holdings...",
+        "looking_up_cnpj": "Looking up CNPJ information...",
     },
     "pt": {
         "idle": "Inativo",
@@ -53,6 +54,7 @@ STATUS_MESSAGES = {
         "error": "Ocorreu um erro",
         "refining_query": "Refinando sua pergunta...",
         "searching_holdings": "Buscando participações do fundo...",
+        "looking_up_cnpj": "Consultando informações do CNPJ...",
     }
 }
 

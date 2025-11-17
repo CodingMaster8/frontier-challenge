@@ -1,8 +1,5 @@
 """Utility functions for the Financial Agent."""
 
-import re
-import sys
-from typing import Tuple, Optional
 from datetime import datetime
 from langchain_core.output_parsers import BaseOutputParser
 from langchain_core.messages import BaseMessage
@@ -10,16 +7,7 @@ from langchain_core.messages import BaseMessage
 from frontier_challenge.tools.semantic_tool import SemanticSearchResult
 from frontier_challenge.tools.sql_tool.models import FilterResult
 from frontier_challenge.tools.holdings_tool.models import HoldingsSearchResult
-
-
-class SafeParser(BaseOutputParser):
-    """Safe parser to replace braces in messages for prompt template compatibility."""
-
-    def parse(self, message):
-        """Parse the message and replace braces."""
-        if isinstance(message, BaseMessage):
-            message.content = message.content.replace("{", "{{").replace("}", "}}")
-        return message
+from frontier_challenge.tools.cnpj_tool.models import CNPJLookupResult
 
 
 def transform_roles(messages, as_string: bool = False, no_attachments: bool = False):
@@ -344,5 +332,61 @@ def _format_filter_result(result: FilterResult, language: str) -> str:
             else f"\n... and {len(result.funds) - 10} more funds"
         )
         fund_list.append(more_msg)
+
+    return header + "\n".join(fund_list)
+
+
+def _format_cnpj_result(result: CNPJLookupResult, language: str) -> str:
+    """Format CNPJ lookup results."""
+    # Handle error case
+    if not result.success:
+        error_prefix = "Erro" if language == "pt" else "Error"
+        return f"{error_prefix}: {result.error_message or 'Unknown error'}"
+
+    # Handle no results
+    if not result.funds:
+        if language == "pt":
+            return "Nenhum fundo encontrado com os CNPJs especificados."
+        return "No funds found with the specified CNPJs."
+
+    header = (
+        f"Encontrei {len(result.funds)} fundo(s):\n\n"
+        if language == "pt"
+        else f"Found {len(result.funds)} fund(s):\n\n"
+    )
+
+    fund_list = []
+    for i, fund in enumerate(result.funds, 1):
+        fund_info = f"{i}. **{fund.legal_name}**\n"
+        fund_info += f"   - CNPJ: `{fund.cnpj}`\n"
+
+        if fund.fund_type:
+            fund_info += f"   - Type: {fund.fund_type}\n"
+
+        # Add financial information
+        if fund.net_asset_value is not None:
+            fund_info += f"   - Net Asset Value: R$ {fund.net_asset_value:,.2f}\n"
+
+        if fund.management_fee_pct is not None:
+            fund_info += f"   - Management Fee: {fund.management_fee_pct:.2f}%\n"
+
+        if fund.min_initial_investment is not None:
+            fund_info += f"   - Minimum Investment: R$ {fund.min_initial_investment:,.2f}\n"
+
+        # Add description preview if available
+        if fund.searchable_text:
+            preview = fund.searchable_text[:200] + "..." if len(fund.searchable_text) > 200 else fund.searchable_text
+            fund_info += f"   - Description: {preview}\n"
+
+        fund_list.append(fund_info)
+
+    # Add not found CNPJs if any
+    if result.not_found_cnpjs:
+        not_found_msg = (
+            f"\nCNPJs não encontrados: {', '.join(result.not_found_cnpjs)}"
+            if language == "pt"
+            else f"\nCNPJs not found: {', '.join(result.not_found_cnpjs)}"
+        )
+        fund_list.append(not_found_msg)
 
     return header + "\n".join(fund_list)
