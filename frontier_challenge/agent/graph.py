@@ -480,6 +480,7 @@ def get_financial_agent_graph(
                 "tool_result_dataframe": [df_bytes] if df_bytes else [],
                 "should_answer_user": [True],
                 "current_status": "processing_results",
+                "visualization_results": [[]],
             }
 
         except Exception as e:
@@ -539,6 +540,7 @@ def get_financial_agent_graph(
                 "tool_result_dataframe": [df_bytes] if df_bytes else [],
                 "should_answer_user": [True],
                 "current_status": "processing_results",
+                "visualization_results": [[]],
             }
 
         except Exception as e:

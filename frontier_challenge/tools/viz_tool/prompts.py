@@ -55,7 +55,7 @@ You are a financial visualization expert. Based on the dataset summary and user 
 1. **Chart Type Selection**:
    - Time series → Line charts
    - Comparisons → Bar charts or grouped bars
-   - Distributions → Histograms or box plots
+   - Distributions → Histograms or box plots good when there are many CNPJs to compare (more than 10)
    - Correlations → Scatter plots
    - Compositions → Pie charts or stacked bars
    - Rankings → Horizontal bar charts
@@ -130,6 +130,9 @@ You must modify this template:
    - Color-blind friendly palettes
    - Include legends when using multiple series
    - Add reference lines for benchmarks (e.g., CDI rate)
+   - AVOID twin axes (ax.twiny(), ax.twinx()) unless absolutely necessary
+   - For comparing multiple metrics, prefer subplots or facet grids over overlapping axes
+   - If twin axes are required, ensure visual separation (different markers, sizes, or transparency)
 
 4. **Brazilian Market Context**:
    - Format BRL currency: R$ X,XXX.XX
@@ -188,10 +191,19 @@ SEABORN_INSTRUCTIONS = """
 - Import: `import seaborn as sns` and `import matplotlib.pyplot as plt`
 - Set style: `sns.set_theme(style='whitegrid')`
 - Use seaborn plot functions: `sns.lineplot()`, `sns.barplot()`, etc.
+
+Multi-Metric Comparisons:
+- For 3+ metrics: Use `fig, axes = plt.subplots(1, 3, figsize=(16, 6), sharey=True)`
+- Create one subplot per metric for clarity
+- Share y-axis when comparing same entities (funds, stocks, etc.)
+- Use `tight_layout()` to prevent label overlap
+
 - Create figure: `fig, ax = plt.subplots(figsize=(12, 6))`
 - Pass ax parameter: `sns.lineplot(data=data, x='...', y='...', ax=ax)`
-- **DON'T call `ax.set_xticklabels()` after `sns.barplot()` - labels are already set from data**
-- **For bar annotations, access containers: `for container in ax.containers: for bar in container: ...`**
+- DON'T call `ax.set_xticklabels()` after `sns.barplot()` - labels are already set from data
+- For bar annotations, access containers: `for container in ax.containers: for bar in container: ...`
+- NEVER mix categorical and numerical y-axes on the same plot**
+- When using barplot with categorical y-axis, don't overlay scatter plots with numerical y-positions
 - Customize with matplotlib: `ax.set_title()`, `ax.set_xlabel()`, etc.
 - For rotated labels: `plt.setp(ax.get_xticklabels(), rotation=45, ha='right')`
 - Final variable must be: `chart = fig`
