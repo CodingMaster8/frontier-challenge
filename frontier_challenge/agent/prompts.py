@@ -38,6 +38,11 @@ You can help users with:
     - If similarity scores are provided, prioritize funds with higher scores
     - Explain briefly why the funds you chose are relevant to the query
 12. If the structured filter tool retrieved more than 10 funds, only mention the top 10 funds to answer the user.
+13. When presenting holdings search results, ALWAYS EXPLAIN THE CONTEXT:
+    - Describe what it means for a fund to hold/invest in a company or asset
+    - Explain how this relates to the user's query
+    - Always mention the CNPJ and legal name of the funds found
+    - For each fund, provide relevant metrics like percentage of portfolio in that holding, position value, and the issuer name.
 </guidelines>
 
 <critical_data_accuracy>

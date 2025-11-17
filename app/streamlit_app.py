@@ -39,6 +39,7 @@ STATUS_MESSAGES = {
         "generating_visualization": "Generating visualization...",
         "error": "Error occurred",
         "refining_query": "Refining your query...",
+        "searching_holdings": "Searching fund holdings...",
     },
     "pt": {
         "idle": "Inativo",
@@ -51,6 +52,7 @@ STATUS_MESSAGES = {
         "generating_visualization": "Gerando visualização...",
         "error": "Ocorreu um erro",
         "refining_query": "Refinando sua pergunta...",
+        "searching_holdings": "Buscando participações do fundo...",
     }
 }
 

@@ -19,10 +19,8 @@ Example queries:
 """
 
 import logging
-import os
 from datetime import datetime
 from typing import List, Optional
-import asyncio
 
 import duckdb
 import pandas as pd
@@ -38,8 +36,6 @@ from .models import (
     EntityExtractionResult,
 )
 from .holdings_prompt import ENTITY_EXTRACTION_PROMPT
-from ...settings import OPENAI_API_KEY
-
 
 logger = logging.getLogger(__name__)
 
@@ -441,8 +437,11 @@ class HoldingsSearchTool:
                 asset_name,
                 asset_short_name,
                 issuer_name,
+                issuer_type,
                 portfolio_weight_pct,
-                position_value
+                position_value,
+                asset_country,
+                asset_currency
             FROM ranked_holdings
             WHERE rn = 1
             ORDER BY portfolio_weight_pct DESC
@@ -567,6 +566,8 @@ class HoldingsSearchTool:
                 issuer_name=cleaned_record.get("issuer_name"),
                 portfolio_weight_pct=cleaned_record.get("portfolio_weight_pct"),
                 position_value=cleaned_record.get("position_value"),
+                asset_country=cleaned_record.get("asset_country"),
+                asset_currency=cleaned_record.get("asset_currency"),
             )
             summaries.append(summary)
 

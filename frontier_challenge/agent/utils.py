@@ -224,6 +224,7 @@ def _format_holdings_result(result: HoldingsSearchResult, language: str) -> str:
         for i, holding in enumerate(result.holdings[:20], 1):
             holding_info = f"{i}. **{holding.legal_name}** - {holding.asset_name}\n"
             holding_info += f"   - CNPJ: `{holding.cnpj}`\n"
+            holding_info += f"   - Issuer: {holding.issuer_name}\n"
 
             if holding.portfolio_weight_pct is not None:
                 holding_info += f"   - Weight: {holding.portfolio_weight_pct:.2f}%\n"
@@ -231,6 +232,10 @@ def _format_holdings_result(result: HoldingsSearchResult, language: str) -> str:
                 holding_info += f"   - Value: R$ {holding.position_value:,.2f}\n"
             if holding.asset_class:
                 holding_info += f"   - Asset Class: {holding.asset_class}\n"
+            if holding.asset_country:
+                holding_info += f"   - Country: {holding.asset_country}\n"
+            if holding.asset_currency:
+                holding_info += f"   - Currency: {holding.asset_currency}\n"
 
             holding_list.append(holding_info)
 

@@ -67,6 +67,8 @@ class FundSummaryWithHolding(BaseModel):
     issuer_name: Optional[str] = None
     portfolio_weight_pct: Optional[float] = None
     position_value: Optional[float] = None
+    asset_country: Optional[str] = None
+    asset_currency: Optional[str] = None
 
     # Matching metadata
     match_score: Optional[float] = None  # Levenshtein similarity score
