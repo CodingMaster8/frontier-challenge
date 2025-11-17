@@ -73,11 +73,17 @@ def get_financial_agent_graph(
     semantic_tool = SemanticSearchTool(db_path=db_path)
     filter_tool = StructuredFilterTool(db_path=db_path, refine_query=False)
     viz_tool = FinancialVisualizationTool(
-        library="matplotlib",
+        library="seaborn",
         image_format="png",
         output_dir="output_visualizations",
         language="portuguese",
     )
+
+    # Build the index in Pinecone
+    try:
+        build_result = semantic_tool.build_index()
+    except Exception as e:
+        logger.error(f"❌ Error building semantic index: {e}", exc_info=True)
 
     # Tool names and descriptions
     tool_names = ["semantic_search", "structured_filter"]
@@ -160,9 +166,12 @@ def get_financial_agent_graph(
         if tool_invocation_has_error and state.tool_invocation_error_guidance:
             tool_invocation_error_guidance = state.tool_invocation_error_guidance[-1].content
 
-        # Format chat history
+        # Format chat history with last 10 messages excluding the last one
+        messages = state.messages[:-1] if state.messages else []
+        recent_messages = messages[-10:] if len(messages) > 10 else messages
+
         chat_history = transform_roles(
-            state.internal_monologue[:-1] if state.internal_monologue else [],
+            recent_messages,
             as_string=True,
             no_attachments=True,
         )
@@ -175,7 +184,6 @@ def get_financial_agent_graph(
         # Build the chain
         chain = prompt_template | llm_router | parser
 
-        # Prepare input for the chain
         values = {
             "tools_description": get_tools_description(),
             "chat_history": chat_history,
@@ -214,6 +222,7 @@ def get_financial_agent_graph(
         # Store the entire response as JSON for later extraction
         return {
             "user_message_tool_reasonings": [ChatMessage(content=response.model_dump_json(), role="fundai")],
+            "current_status": "refining_query"
         }
 
     async def node_extract_tool_call(state: AgentState) -> dict:
@@ -232,7 +241,7 @@ def get_financial_agent_graph(
             tool_instruction = ""
             reasoning = reasoning_json
 
-        logger.info(f"🔧 Extracted tool: {tool_name}")
+        logger.info(f"Extracted tool: {tool_name}")
         logger.debug(f"Tool instruction: {tool_instruction[:200] if tool_instruction else '(empty)'}")
 
         return_dict = {
@@ -298,7 +307,6 @@ def get_financial_agent_graph(
             ]
 
         elif tool_name == "unknown_capability":
-            # Unknown capability
             logger.info("❓ Unknown capability detected")
             return_dict["current_status"] = "generating_response"
             return_dict["visualization_results"] = [[]]  # Clear previous visualizations
@@ -322,12 +330,6 @@ def get_financial_agent_graph(
         logger.debug(f"Query: {instruction}")
 
         try:
-            # Build the index
-            try:
-                build_result = semantic_tool.build_index()
-            except Exception as e:
-                logger.error(f"❌ Error building semantic index: {e}", exc_info=True)
-
             # The output is a SemanticSearchResult object
             result = semantic_tool.semantic_search(query=instruction, top_k=5)
 
@@ -371,7 +373,7 @@ def get_financial_agent_graph(
         """Execute structured filter tool."""
         instruction = state.tool_instructions[-1].content
 
-        logger.info(f"📊 Executing structured filter...")
+        logger.info(f"Executing structured filter...")
         logger.debug(f"Query: {instruction}")
 
         try:
@@ -552,7 +554,7 @@ def get_financial_agent_graph(
             reasoning = f"Error parsing decision: {str(e)}"
 
         logger.info(f"{'✅' if should_visualize else '❌'} Visualization decision: {should_visualize}")
-        logger.info(f"💭 Reasoning: {reasoning}")
+        logger.info(f"Reasoning: {reasoning}")
 
         status = "generating_visualization" if should_visualize else "processing_results"
 
@@ -587,7 +589,7 @@ def get_financial_agent_graph(
             # Update viz tool language if needed
             viz_tool.language = viz_language
 
-            logger.info(f"📊 Generating visualization for {len(df)} results")
+            logger.info(f"Generating visualization for {len(df)} results")
             logger.debug(f"DataFrame columns: {df.columns.tolist()}")
 
             # Generate visualization
@@ -595,7 +597,7 @@ def get_financial_agent_graph(
                 data=df,
                 query=user_message,
                 number_visualizations=1,
-                library="matplotlib",
+                library="seaborn",
                 image_format="png",
             )
 

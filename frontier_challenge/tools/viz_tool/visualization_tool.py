@@ -15,8 +15,10 @@ Key Features:
 import logging
 from io import BytesIO
 from typing import Literal
-
+import json
 import pandas as pd
+from pathlib import Path
+from datetime import datetime
 
 from .graph import get_visualization_graph
 from .models import VisualizationResult
@@ -66,6 +68,59 @@ class FinancialVisualizationTool:
             f"Initialized FinancialVisualizationTool: "
             f"library={library}, format={image_format}, output={output_dir}"
         )
+
+    def _save_generated_code(
+        self,
+        visualizations: list[VisualizationResult],
+        query: str,
+        data_shape: tuple,
+    ) -> str:
+        """
+        Save generated code to a JSON file.
+
+        Parameters
+        ----------
+        visualizations : list[VisualizationResult]
+            List of visualization results
+        query : str
+            Original query
+        data_shape : tuple
+            Shape of input DataFrame
+
+        Returns
+        -------
+        str
+            Path to saved JSON file
+        """
+        code_output_dir = Path(self.output_dir) / "generated_code"
+        code_output_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"viz_code_{timestamp}.json"
+        filepath = Path(code_output_dir) / filename
+
+        code_data = {
+            "timestamp": timestamp,
+            "query": query,
+            "data_shape": {"rows": data_shape[0], "columns": data_shape[1]},
+            "library": self.library,
+            "image_format": self.image_format,
+            "language": self.language,
+            "visualizations": [
+                {
+                    "index": idx,
+                    "description": viz.description,
+                    "image_path": viz.image_path,
+                    "generated_code": viz.python_code,
+                }
+                for idx, viz in enumerate(visualizations, 1)
+            ],
+        }
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(code_data, f, indent=2, ensure_ascii=False)
+
+        return str(filepath)
 
     async def create_visualization(
         self,
@@ -141,5 +196,12 @@ class FinancialVisualizationTool:
         visualizations = result.get("visualizations", [])
 
         logger.info(f"Successfully generated {len(visualizations)} visualization(s)")
+
+        if visualizations:
+            self._save_generated_code(
+                visualizations=visualizations,
+                query=query,
+                data_shape=data.shape,
+            )
 
         return visualizations

@@ -27,6 +27,8 @@ Analyze the dataset and provide a comprehensive summary that includes:
    - Missing values and their significance
    - Outliers or unusual patterns
    - Distribution characteristics (skewness, spread)
+   - **CRITICAL: Percentage columns are already in percentage form (e.g., 2.8 means 2.8%, NOT 0.028)**
+
 
 4. **Insights for Visualization**:
    - Key relationships worth exploring
@@ -114,9 +116,12 @@ You must modify this template:
 
 2. **Financial Data Handling**:
    - Convert date columns properly: `pd.to_datetime(data['date'], errors='coerce')`
-   - Handle percentage values (They are in percent format, e.g., 5.5 means 5.5%)
+   - **CRITICAL: Percentage values are ALREADY in percentage form (e.g., 5.5 means 5.5%, NOT 0.055)**
+   - **DO NOT multiply percentage columns by 100 - they are ready to use as-is**
    - Format currency values with appropriate notation
    - Handle missing data gracefully
+   - **USE CNPJ as the identifier/label for funds, NOT the fund name**
+   - **When displaying fund information, use the CNPJ column for labels, legends, and axes**
 
 3. **Chart Aesthetics**:
    - Use professional financial styling
@@ -179,12 +184,15 @@ PLOTLY_INSTRUCTIONS = """
 """
 
 SEABORN_INSTRUCTIONS = """
-**Seaborn Instructions**:
+**Seaborn Instructions** (v0.13.2+):
 - Import: `import seaborn as sns` and `import matplotlib.pyplot as plt`
 - Set style: `sns.set_theme(style='whitegrid')`
 - Use seaborn plot functions: `sns.lineplot()`, `sns.barplot()`, etc.
 - Create figure: `fig, ax = plt.subplots(figsize=(12, 6))`
 - Pass ax parameter: `sns.lineplot(data=data, x='...', y='...', ax=ax)`
+- **DON'T call `ax.set_xticklabels()` after `sns.barplot()` - labels are already set from data**
+- **For bar annotations, access containers: `for container in ax.containers: for bar in container: ...`**
 - Customize with matplotlib: `ax.set_title()`, `ax.set_xlabel()`, etc.
+- For rotated labels: `plt.setp(ax.get_xticklabels(), rotation=45, ha='right')`
 - Final variable must be: `chart = fig`
 """

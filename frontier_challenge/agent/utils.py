@@ -177,6 +177,7 @@ def _format_semantic_result(result: SemanticSearchResult, language: str) -> str:
         fund_info += f"   - CNPJ: {match.cnpj}\n"
         fund_info += f"   - Type: {match.fund_type}\n"
         fund_info += f"   - Relevance: {match.score:.2f}\n"
+        fund_info += f"   - Fund Description: {match.matched_text_preview}"
         fund_list.append(fund_info)
 
     return header + "\n".join(fund_list)
