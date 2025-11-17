@@ -83,7 +83,7 @@ def get_financial_agent_graph(
     try:
         build_result = semantic_tool.build_index()
     except Exception as e:
-        logger.error(f"❌ Error building semantic index: {e}", exc_info=True)
+        logger.error(f"Error building semantic index: {e}", exc_info=True)
 
     # Tool names and descriptions
     tool_names = ["semantic_search", "structured_filter", "holdings_search", "cnpj_lookup"]
@@ -240,7 +240,7 @@ def get_financial_agent_graph(
             tool_instruction = response.tool_instruction
             reasoning = response.reasoning
         except Exception as e:
-            logger.error(f"❌ Failed to parse ToolReasoningResponse: {e}")
+            logger.error(f"Failed to parse ToolReasoningResponse: {e}")
             tool_name = "error"
             tool_instruction = ""
             reasoning = reasoning_json
@@ -258,7 +258,7 @@ def get_financial_agent_graph(
 
         # Validate tool extraction
         if tool_name == "error":
-            logger.error("❌ Tool extraction error: Invalid format")
+            logger.error("Tool extraction error: Invalid format")
             return_dict["tool_invocation_error_guidance"] = [
                 ChatMessage(
                     content="Error: You didn't answer with the tool name and tool instructions in the correct format. Fix your output.",
@@ -268,7 +268,7 @@ def get_financial_agent_graph(
             return_dict["tool_invocation_has_error"] = [True]
 
         elif tool_name not in tool_names + ["unknown_capability", "no_tool"]:
-            logger.error(f"❌ Tool extraction error: Unknown tool '{tool_name}'")
+            logger.error(f"Tool extraction error: Unknown tool '{tool_name}'")
             return_dict["tool_invocation_error_guidance"] = [
                 ChatMessage(
                     content=f"Error: Tool '{tool_name}' does not exist. Pick a tool that exists, or reconsider your answer.",
@@ -360,7 +360,7 @@ def get_financial_agent_graph(
             }
 
         except Exception as e:
-            logger.error(f"❌ Error in semantic search: {e}", exc_info=True)
+            logger.error(f"Error in semantic search: {e}", exc_info=True)
             error_msg = (
                 f"Erro ao buscar fundos: {str(e)}"
                 if state.user_language == "pt"
@@ -421,7 +421,7 @@ def get_financial_agent_graph(
             }
 
         except Exception as e:
-            logger.error(f"❌ Error in structured filter: {e}", exc_info=True)
+            logger.error(f"Error in structured filter: {e}", exc_info=True)
             error_msg = (
                 f"Erro ao filtrar fundos: {str(e)}"
                 if state.user_language == "pt"
@@ -483,7 +483,7 @@ def get_financial_agent_graph(
             }
 
         except Exception as e:
-            logger.error(f"❌ Error in holdings search: {e}", exc_info=True)
+            logger.error(f"Error in holdings search: {e}", exc_info=True)
             error_msg = (
                 f"Erro ao buscar participações: {str(e)}"
                 if state.user_language == "pt"
@@ -542,7 +542,7 @@ def get_financial_agent_graph(
             }
 
         except Exception as e:
-            logger.error(f"❌ Error in CNPJ lookup: {e}", exc_info=True)
+            logger.error(f"Error in CNPJ lookup: {e}", exc_info=True)
             error_msg = (
                 f"Erro ao buscar CNPJ: {str(e)}"
                 if state.user_language == "pt"
@@ -635,7 +635,7 @@ def get_financial_agent_graph(
 
         # Only consider visualization for structured_filter tool
         if tool_name != "structured_filter":
-            logger.info("❌ Tool is not structured_filter, skipping visualization")
+            logger.info("Tool is not structured_filter, skipping visualization")
             return {
                 "should_generate_visualization": [False],
                 "visualization_reasoning": ["Visualization only supported for structured_filter results"],
@@ -644,7 +644,7 @@ def get_financial_agent_graph(
 
         # Check if we have tool result dataframe
         if not state.tool_result_dataframe or len(state.tool_result_dataframe) == 0:
-            logger.info("❌ No dataframe available for visualization")
+            logger.info("No dataframe available for visualization")
             return {
                 "should_generate_visualization": [False],
                 "visualization_reasoning": ["No data available for visualization"],
@@ -709,7 +709,7 @@ def get_financial_agent_graph(
 
     async def node_generate_visualization(state: AgentState) -> dict:
         """Generate visualization from structured filter results."""
-        logger.info("🎨 Generating visualization...")
+        logger.info("Generating visualization...")
 
         try:
             # Get the dataframe from state
@@ -738,7 +738,7 @@ def get_financial_agent_graph(
                 image_format="png",
             )
 
-            logger.info(f"✅ Generated {len(viz_results)} visualization(s)")
+            logger.info(f"Generated {len(viz_results)} visualization(s)")
 
             # Convert to serializable format
             viz_list = []
@@ -760,7 +760,7 @@ def get_financial_agent_graph(
             }
 
         except Exception as e:
-            logger.error(f"❌ Error generating visualization: {e}", exc_info=True)
+            logger.error(f"Error generating visualization: {e}", exc_info=True)
             error_msg = f"Visualization generation failed: {str(e)}"
             return {
                 "visualization_results": [[]],
