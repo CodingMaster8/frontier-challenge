@@ -6,16 +6,14 @@ from io import BytesIO
 from typing import Optional
 
 import pandas as pd
-from langchain_core.messages import AIMessage, ChatMessage, HumanMessage, SystemMessage
-from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from langchain_core.messages import ChatMessage, HumanMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_openai import ChatOpenAI
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import START, END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.graph.message import AnyMessage
-
 
 
 from .models import AgentState, ToolReasoningResponse, VisualizationDecisionResponse
@@ -33,9 +31,9 @@ from .utils import (
     detect_language,
     format_tool_result,
     _format_semantic_result,
-    SafeParser,
+    _format_holdings_result,
 )
-from ..tools import SemanticSearchTool, StructuredFilterTool, FinancialVisualizationTool
+from ..tools import SemanticSearchTool, StructuredFilterTool, FinancialVisualizationTool, HoldingsSearchTool
 
 logger = logging.getLogger(__name__)
 
@@ -72,15 +70,22 @@ def get_financial_agent_graph(
     # Initialize tools
     semantic_tool = SemanticSearchTool(db_path=db_path)
     filter_tool = StructuredFilterTool(db_path=db_path, refine_query=False)
+    holdings_tool = HoldingsSearchTool(db_path=db_path)
     viz_tool = FinancialVisualizationTool(
-        library="matplotlib",
+        library="seaborn",
         image_format="png",
         output_dir="output_visualizations",
         language="portuguese",
     )
 
+    # Build the index in Pinecone
+    try:
+        build_result = semantic_tool.build_index()
+    except Exception as e:
+        logger.error(f"❌ Error building semantic index: {e}", exc_info=True)
+
     # Tool names and descriptions
-    tool_names = ["semantic_search", "structured_filter"]
+    tool_names = ["semantic_search", "structured_filter", "holdings_search"]
 
     logger.info(f"Registered tools: {tool_names}")
 
@@ -90,6 +95,8 @@ def get_financial_agent_graph(
             semantic_search: Search for funds using natural language query with semantic similarity. This tool uses vector embeddings to find funds based on conceptual similarity rather than exact keyword matches. It's ideal for exploratory searches and fuzzy matching scenarios. Use for natural language queries (e.g., "sustainable tech funds", "conservative bonds"), fuzzy/partial name matching (e.g., "Bradesco gold", "BB renda fixa"), conceptual searches (e.g., "low risk", "ESG investing"), queries in Portuguese or English, finding funds similar to a description or investment strategy, when exact CNPJ or legal name is unknown. Parameters: query (str, required), top_k (int, optional, default=10).
 
             structured_filter: Filter funds using natural language query that gets converted to SQL, or structured criteria. Use this for queries with specific numbers, comparisons, or precise filters like performance metrics (returns, volatility, Sharpe ratio), fees (management, performance, expense ratio), fund size/AUM, investment constraints, classification filters, risk class, or boolean filters. This tool converts natural language to SQL queries against the fund database. Parameters: query (str, optional), criteria (FundFilterCriteria, optional).
+
+            holdings_search: Search for funds that hold specific companies, assets, or securities in their portfolios. This tool enables finding funds by the assets they invest in, using fuzzy matching with Levenshtein distance for company/asset name matching. Use this for queries about: specific company holdings (e.g., "funds that invest in Petrobras", "funds holding Apple stock"), asset exposure (e.g., "funds with Vale holdings", "exposure to Brazilian government bonds"), portfolio composition queries (e.g., "which funds own Amazon?", "funds with Microsoft"), investment in specific issuers or securities. This tool searches the detailed holdings data and can group results by fund or show individual positions. Parameters: query (str, optional), company_name (str, optional), criteria (HoldingsSearchCriteria, optional).
         """.strip()
 
     async def node_greeting(state: AgentState) -> dict:
@@ -160,9 +167,12 @@ def get_financial_agent_graph(
         if tool_invocation_has_error and state.tool_invocation_error_guidance:
             tool_invocation_error_guidance = state.tool_invocation_error_guidance[-1].content
 
-        # Format chat history
+        # Format chat history with last 10 messages excluding the last one
+        messages = state.messages[:-1] if state.messages else []
+        recent_messages = messages[-10:] if len(messages) > 10 else messages
+
         chat_history = transform_roles(
-            state.internal_monologue[:-1] if state.internal_monologue else [],
+            recent_messages,
             as_string=True,
             no_attachments=True,
         )
@@ -175,7 +185,6 @@ def get_financial_agent_graph(
         # Build the chain
         chain = prompt_template | llm_router | parser
 
-        # Prepare input for the chain
         values = {
             "tools_description": get_tools_description(),
             "chat_history": chat_history,
@@ -214,6 +223,7 @@ def get_financial_agent_graph(
         # Store the entire response as JSON for later extraction
         return {
             "user_message_tool_reasonings": [ChatMessage(content=response.model_dump_json(), role="fundai")],
+            "current_status": "refining_query"
         }
 
     async def node_extract_tool_call(state: AgentState) -> dict:
@@ -232,7 +242,7 @@ def get_financial_agent_graph(
             tool_instruction = ""
             reasoning = reasoning_json
 
-        logger.info(f"🔧 Extracted tool: {tool_name}")
+        logger.info(f"Extracted tool: {tool_name}")
         logger.debug(f"Tool instruction: {tool_instruction[:200] if tool_instruction else '(empty)'}")
 
         return_dict = {
@@ -272,6 +282,7 @@ def get_financial_agent_graph(
             status_map = {
                 "semantic_search": "searching_funds",
                 "structured_filter": "filtering_data",
+                "holdings_search": "searching_holdings",
             }
             tool_status = status_map.get(tool_name, "processing_results")
 
@@ -298,7 +309,6 @@ def get_financial_agent_graph(
             ]
 
         elif tool_name == "unknown_capability":
-            # Unknown capability
             logger.info("❓ Unknown capability detected")
             return_dict["current_status"] = "generating_response"
             return_dict["visualization_results"] = [[]]  # Clear previous visualizations
@@ -322,12 +332,6 @@ def get_financial_agent_graph(
         logger.debug(f"Query: {instruction}")
 
         try:
-            # Build the index
-            try:
-                build_result = semantic_tool.build_index()
-            except Exception as e:
-                logger.error(f"❌ Error building semantic index: {e}", exc_info=True)
-
             # The output is a SemanticSearchResult object
             result = semantic_tool.semantic_search(query=instruction, top_k=5)
 
@@ -371,7 +375,7 @@ def get_financial_agent_graph(
         """Execute structured filter tool."""
         instruction = state.tool_instructions[-1].content
 
-        logger.info(f"📊 Executing structured filter...")
+        logger.info(f"Executing structured filter...")
         logger.debug(f"Query: {instruction}")
 
         try:
@@ -405,8 +409,7 @@ def get_financial_agent_graph(
                 "internal_monologue": [
                     ChatMessage(
                         content=f"Tool result:\n{formatted_result}",
-                        role="tool",
-                    )
+                        role="tool"),
                 ],
                 "tool_result_dataframe": [df_bytes] if df_bytes else [],
                 "should_answer_user": [True],
@@ -419,6 +422,68 @@ def get_financial_agent_graph(
                 f"Erro ao filtrar fundos: {str(e)}"
                 if state.user_language == "pt"
                 else f"Error filtering funds: {str(e)}"
+            )
+            return {
+                "internal_monologue": [
+                    ChatMessage(content=f"Tool error: {error_msg}", role="tool")
+                ],
+                "should_answer_user": [True],
+                "current_status": "error",
+            }
+
+    async def node_execute_holdings_search(state: AgentState) -> dict:
+        """Execute holdings search tool."""
+        instruction = state.tool_instructions[-1].content
+
+        logger.info(f"Executing holdings search...")
+        logger.debug(f"Query: {instruction}")
+
+        try:
+            # Execute holdings search
+            result = await holdings_tool.search_holdings(query=instruction)
+
+            logger.info(f"✅ Holdings search completed - found {result.unique_funds_count} funds with matching holdings")
+            logger.debug(f"Search method: {result.search_method}")
+
+            # Format result for display
+            formatted_result = _format_holdings_result(result, state.user_language)
+
+            logger.debug(f"Formatted result preview: {formatted_result[:200]}...")
+
+            # Convert results to DataFrame if available for visualization
+            df = None
+            if result.fund_summaries and len(result.fund_summaries) > 0:
+                df = pd.DataFrame([summary.model_dump() for summary in result.fund_summaries])
+                logger.info(f"Created DataFrame with shape {df.shape}")
+            elif result.holdings and len(result.holdings) > 0:
+                df = pd.DataFrame([holding.model_dump() for holding in result.holdings])
+                logger.info(f"Created DataFrame with shape {df.shape}")
+
+            # Serialize DataFrame
+            df_bytes = None
+            if df is not None:
+                buffer = BytesIO()
+                df.to_pickle(buffer)
+                df_bytes = buffer.getvalue()
+
+            return {
+                "internal_monologue": [
+                    ChatMessage(
+                        content=f"Tool result:\n{formatted_result}",
+                        role="tool",
+                    )
+                ],
+                "tool_result_dataframe": [df_bytes] if df_bytes else [],
+                "should_answer_user": [True],
+                "current_status": "processing_results",
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Error in holdings search: {e}", exc_info=True)
+            error_msg = (
+                f"Erro ao buscar participações: {str(e)}"
+                if state.user_language == "pt"
+                else f"Error searching holdings: {str(e)}"
             )
             return {
                 "internal_monologue": [
@@ -446,9 +511,9 @@ def get_financial_agent_graph(
 
         # Add conversation history - limit to last 10 messages for efficiency
         internal_monologue = state.internal_monologue or []
-        recent_monologue = internal_monologue[-10:] if len(internal_monologue) > 10 else internal_monologue
+        recent_monologue = internal_monologue[-15:] if len(internal_monologue) > 15 else internal_monologue
 
-        if len(internal_monologue) > 10:
+        if len(internal_monologue) > 15:
             logger.debug(f"Limiting context window: using last 10 of {len(internal_monologue)} messages")
 
         messages.extend(transform_roles(recent_monologue))
@@ -492,7 +557,18 @@ def get_financial_agent_graph(
         language = state.user_language
         tool_name = state.tool_invocations[-1].content
 
-        logger.info("🎨 Deciding if visualization is needed...")
+        logger.info("Deciding if visualization is needed...")
+
+        if state.should_generate_visualization and len(state.should_generate_visualization) > 0:
+            viz_enabled = state.should_generate_visualization[-1]
+            if not viz_enabled:
+                logger.info("Lightning Mode enabled by user settings - skipping visualization")
+                return {
+                    "should_generate_visualization": [False],
+                    "visualization_reasoning": ["Lightning mode enabled by user"],
+                    "visualization_results": [[]],  # Clear previous visualizations
+                    "current_status": "processing_results",
+                }
 
         # Only consider visualization for structured_filter tool
         if tool_name != "structured_filter":
@@ -552,7 +628,7 @@ def get_financial_agent_graph(
             reasoning = f"Error parsing decision: {str(e)}"
 
         logger.info(f"{'✅' if should_visualize else '❌'} Visualization decision: {should_visualize}")
-        logger.info(f"💭 Reasoning: {reasoning}")
+        logger.info(f"Reasoning: {reasoning}")
 
         status = "generating_visualization" if should_visualize else "processing_results"
 
@@ -587,15 +663,15 @@ def get_financial_agent_graph(
             # Update viz tool language if needed
             viz_tool.language = viz_language
 
-            logger.info(f"📊 Generating visualization for {len(df)} results")
-            logger.debug(f"DataFrame columns: {df.columns.tolist()}")
+            logger.info(f"Generating visualization for {len(df)} results")
+            logger.info(f"User query: {user_message}")
 
             # Generate visualization
             viz_results = await viz_tool.create_visualization(
                 data=df,
                 query=user_message,
                 number_visualizations=1,
-                library="matplotlib",
+                library="seaborn",
                 image_format="png",
             )
 
@@ -699,6 +775,7 @@ def get_financial_agent_graph(
     workflow.add_node("extract_tool_call", node_extract_tool_call)
     workflow.add_node("semantic_search", node_execute_semantic_search)
     workflow.add_node("structured_filter", node_execute_structured_filter)
+    workflow.add_node("holdings_search", node_execute_holdings_search)
     workflow.add_node("decide_visualization", node_decide_visualization)
     workflow.add_node("generate_visualization", node_generate_visualization)
     workflow.add_node("answer_user_query", node_answer_user_query)
@@ -726,6 +803,7 @@ def get_financial_agent_graph(
     # Tool nodes route to post_tool_router
     workflow.add_conditional_edges("semantic_search", post_tool_router)
     workflow.add_conditional_edges("structured_filter", post_tool_router)
+    workflow.add_conditional_edges("holdings_search", post_tool_router)
 
     # Visualization flow
     workflow.add_conditional_edges("decide_visualization", visualization_router)

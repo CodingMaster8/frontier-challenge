@@ -69,7 +69,7 @@ def main():
     free_tier_gb = 2.0
     usage_pct = (total_size_mb / (free_tier_gb * 1024)) * 100
 
-    print(f"\n💾 STORAGE ANALYSIS")
+    print(f"\nSTORAGE ANALYSIS")
     print("-" * 80)
     print(f"Per vector: {vector_size_kb:.2f} KB")
     print(f"Total usage: {total_size_mb:.2f} MB")

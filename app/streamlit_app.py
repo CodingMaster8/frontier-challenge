@@ -38,6 +38,8 @@ STATUS_MESSAGES = {
         "generating_response": "Generating response...",
         "generating_visualization": "Generating visualization...",
         "error": "Error occurred",
+        "refining_query": "Refining your query...",
+        "searching_holdings": "Searching fund holdings...",
     },
     "pt": {
         "idle": "Inativo",
@@ -49,6 +51,8 @@ STATUS_MESSAGES = {
         "generating_response": "Gerando resposta...",
         "generating_visualization": "Gerando visualização...",
         "error": "Ocorreu um erro",
+        "refining_query": "Refinando sua pergunta...",
+        "searching_holdings": "Buscando participações do fundo...",
     }
 }
 
@@ -115,6 +119,9 @@ if "agent_graph" not in st.session_state:
         st.session_state.thread_id = "streamlit-session-1"
         logger.info("✅ Agent graph initialized successfully")
 
+if "viz_mode_lightning" not in st.session_state:
+    st.session_state.viz_mode_lightning = False
+
 # Sidebar
 with st.sidebar:
     # Display the frontier logo
@@ -150,6 +157,18 @@ with st.sidebar:
     if st.session_state.language != lang_code:
         st.session_state.language = lang_code
         st.session_state.initialized = False  # Reset to show greeting in new language
+        st.rerun()
+
+    lightning_mode = st.toggle(
+        "Lightning Mode" if st.session_state.language == "en"
+        else "Modo Relâmpago",
+        value=st.session_state.viz_mode_lightning,
+        key="lightning_toggle",
+        help="Skip visualizations for faster responses" if st.session_state.language == "en"
+             else "Pular visualizações para respostas mais rápidas"
+    )
+    if st.session_state.viz_mode_lightning != lightning_mode:
+        st.session_state.viz_mode_lightning = lightning_mode
 
     if st.button("🔄 Clear Conversation"):
         st.session_state.messages = []
@@ -200,10 +219,13 @@ if prompt := st.chat_input("Ask me about Brazilian funds..." if st.session_state
 
     logger.info(f"👤 User query: {prompt}")
 
-    # Get agent response
     with st.chat_message("assistant", avatar=avatar):
         message_placeholder = st.empty()
         status_placeholder = st.empty()
+
+        analyzing_msg = get_status_message("analyzing_query", st.session_state.language)
+        display_status(status_placeholder, analyzing_msg)
+        st.session_state.agent_status = "analyzing_query"
 
         try:
             logger.info("Invoking agent graph...")
@@ -222,11 +244,13 @@ if prompt := st.chat_input("Ask me about Brazilian funds..." if st.session_state
                 """Run agent and stream status updates."""
                 last_status = "idle"
 
+                logger.info(f"📊 Will generate viz: {not st.session_state.viz_mode_lightning}")
                 # Stream through the graph execution
                 async for event in st.session_state.agent_graph.astream(
                     {
                         "messages": [HumanMessage(content=prompt)],
-                        "user_language": st.session_state.language
+                        "user_language": st.session_state.language,
+                        "should_generate_visualization": [not st.session_state.viz_mode_lightning]
                     },
                     config=config
                 ):
@@ -253,14 +277,13 @@ if prompt := st.chat_input("Ask me about Brazilian funds..." if st.session_state
             status_placeholder.empty()
 
             logger.info("✅ Agent graph execution completed")
-            logger.debug(f"Result keys: {result.keys() if result else 'None'}")
 
             # Extract the final response from the result
             if result and "messages" in result and len(result["messages"]) > 0:
                 # Get the last AI message
                 last_message = result["messages"][-1]
                 full_response = last_message.content if hasattr(last_message, 'content') else str(last_message)
-                logger.info(f"💬 Agent response: {full_response[:100]}...")
+                logger.info(f"Agent response: {full_response[:100]}...")
             else:
                 full_response = "I apologize, but I couldn't generate a response. Please try again." if st.session_state.language == "en" else "Desculpe, não consegui gerar uma resposta. Tente novamente."
                 logger.warning("⚠️ No valid response from agent")
@@ -272,7 +295,7 @@ if prompt := st.chat_input("Ask me about Brazilian funds..." if st.session_state
             viz_results = []
             if result and "visualization_results" in result and result["visualization_results"]:
                 viz_results = result["visualization_results"][-1] if result["visualization_results"] else []
-                logger.info(f"🎨 Found {len(viz_results)} visualization(s)")
+                logger.info(f"Found {len(viz_results)} visualization(s)")
 
             # Display visualizations if available
             if viz_results:

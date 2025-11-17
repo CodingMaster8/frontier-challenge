@@ -9,60 +9,60 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class AgentState(BaseModel):
-    """Base state for the financial agent conversation flow."""
+    """Base state for the agent conversation flow."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     # Core conversation state
     messages: Annotated[Sequence[AnyMessage], add_messages] = Field(
-        default=None,
+        default_factory=list,
         description="Messages visible to the user in the conversation. These are the primary chat messages exchanged between the user and the agent."
     )
 
     internal_monologue: Annotated[Sequence[AnyMessage], add_messages] = Field(
-        default=None,
+        default_factory=list,
         description="Internal reasoning messages not shown to the user. Used for agent's thought process, decision-making steps, and debugging information."
     )
 
     # Tool routing state
     tool_instructions: Annotated[Sequence[AnyMessage], add_messages] = Field(
-        default=None,
+        default_factory=list,
         description="Natural language instructions to pass to tools. Each instruction should clearly describe what the tool needs to accomplish in plain language."
     )
 
     tool_invocations: Annotated[Sequence[AnyMessage], add_messages] = Field(
-        default=None,
+        default_factory=list,
         description="Names of tools that have been invoked during the conversation. Used to track which tools were called and in what order."
     )
 
     tool_invocation_error_guidance: Annotated[Sequence[AnyMessage], add_messages] = Field(
-        default=None,
+        default_factory=list,
         description="Error messages and guidance when tool invocations fail. Helps the agent understand what went wrong and how to recover."
     )
 
     user_message_tool_reasonings: Annotated[Sequence[AnyMessage], add_messages] = Field(
-        default=None,
+        default_factory=list,
         description="Agent's reasoning for selecting specific tools based on user messages. Explains why certain tools were chosen over others."
     )
 
     tool_invocation_has_error: Annotated[Sequence[bool], operator.add] = Field(
-        default=None,
+        default_factory=list,
         description="Boolean flags indicating whether each tool invocation resulted in an error. True means error occurred, False means success."
     )
 
     will_invoke_tool: Annotated[Sequence[bool], operator.add] = Field(
-        default=None,
+        default_factory=list,
         description="Boolean flags indicating whether a tool will be invoked in the current step. True means tool call is planned, False means no tool needed."
     )
 
     should_answer_user: Annotated[Sequence[bool], operator.add] = Field(
-        default=None,
+        default_factory=list,
         description="Boolean flags indicating whether the agent should respond to the user after tool execution. True means provide answer, False means continue processing."
     )
 
     # Session management
     session_summary: Annotated[Sequence[str], operator.add] = Field(
-        default=None,
+        default_factory=list,
         description="Brief summaries of conversation sessions. Used to maintain context across multiple interactions and remember key discussion points."
     )
 
@@ -77,28 +77,28 @@ class AgentState(BaseModel):
     )
 
     langfuse_post_interrupt_tags: list[str] = Field(
-        default=None,
+        default_factory=list,
         description="Tags to add to Langfuse trace after human-in-the-loop interrupts. Used for monitoring and debugging agent behavior."
     )
 
     # Visualization state
     should_generate_visualization: Annotated[Sequence[bool], operator.add] = Field(
-        default=None,
+        default_factory=list,
         description="Boolean flags indicating whether a visualization should be generated. True means visualization adds value, False means it doesn't."
     )
 
     visualization_reasoning: Annotated[Sequence[str], operator.add] = Field(
-        default=None,
+        default_factory=list,
         description="Reasoning for why a visualization should or shouldn't be generated. Explains the decision-making process."
     )
 
     tool_result_dataframe: Annotated[Sequence[bytes], operator.add] = Field(
-        default=None,
+        default_factory=list,
         description="Serialized DataFrame from tool results (structured_filter). Used as input for visualization generation."
     )
 
     visualization_results: Annotated[Sequence[list], operator.add] = Field(
-        default=None,
+        default_factory=list,
         description="List of generated visualizations with metadata (image paths, descriptions, code). Empty list if no visualization was generated."
     )
 
@@ -134,17 +134,17 @@ class VisualizationDecisionResponse(BaseModel):
 class SemanticSearchState(AgentState):
     """State for semantic search tool execution."""
 
-    search_query: str = Field(
+    search_query: Optional[str] = Field(
         default=None,
         description="Natural language search query for semantic search. Should describe the type of funds or financial products the user is looking for. Example: 'equity funds with focus on technology sector' or 'conservative fixed income funds'."
     )
 
-    search_results: list[dict] = Field(
+    search_results: Optional[list[dict]] = Field(
         default=None,
         description="List of fund results returned from semantic search. Each dict contains fund details like CNPJ, fund name, type, administrator, and similarity score. Ordered by relevance to the query."
     )
 
-    search_execution_time: float = Field(
+    search_execution_time: Optional[float] = Field(
         default=None,
         description="Time taken to execute the semantic search in seconds. Used for performance monitoring and optimization."
     )
@@ -153,22 +153,22 @@ class SemanticSearchState(AgentState):
 class StructuredFilterState(AgentState):
     """State for structured filter tool execution."""
 
-    filter_query: str = Field(
+    filter_query: Optional[str] = Field(
         default=None,
         description="Natural language filter query describing the filtering criteria. Should specify metrics, thresholds, and conditions. Example: 'funds with Sharpe ratio above 2 and returns greater than 10%' or 'equity funds with AUM over 100 million'."
     )
 
-    generated_sql: str = Field(
+    generated_sql: Optional[str] = Field(
         default=None,
         description="SQL query generated from the natural language filter query. This is the executable SQL that will be run against the database to retrieve matching funds based on structured criteria."
     )
 
-    filter_results: list[dict] = Field(
+    filter_results: Optional[list[dict]] = Field(
         default=None,
         description="List of fund results matching the filter criteria. Each dict contains fund details and the specific metrics that were filtered on. Results satisfy all conditions specified in the filter query."
     )
 
-    filter_execution_time: float = Field(
+    filter_execution_time: Optional[float] = Field(
         default=None,
         description="Time taken to execute the structured filter query in seconds. Includes SQL generation and execution time. Used for performance monitoring."
     )
